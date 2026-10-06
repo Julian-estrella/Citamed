@@ -31,6 +31,7 @@ class User extends Authenticatable
         'name',
         'email',
         'password',
+        'role',
     ];
 
     /**
@@ -65,5 +66,28 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
         ];
+    }
+
+    public function hasRole(string $role): bool
+    {
+        $requestedRole = strtolower(trim($role));
+        $currentRole = strtolower((string) ($this->role ?? ''));
+
+        return $currentRole === $requestedRole;
+    }
+
+    public function isAdmin(): bool
+    {
+        return $this->hasRole('administrador');
+    }
+
+    public function isMedico(): bool
+    {
+        return $this->hasRole('medico');
+    }
+
+    public function isRecepcion(): bool
+    {
+        return $this->hasRole('recepcion');
     }
 }

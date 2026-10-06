@@ -15,11 +15,37 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
-        // User::factory(10)->create();
+        $adminUser = User::where('name', 'Julian Estrella')->first();
 
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);
+        if ($adminUser) {
+            $adminUser->update([
+                'role' => 'administrador',
+                'password' => $adminUser->password ?: bcrypt('admin123'),
+            ]);
+        }
+
+        User::where('name', '!=', 'Julian Estrella')
+            ->where('role', 'administrador')
+            ->update(['role' => 'recepcion']);
+
+        User::updateOrCreate(
+            ['email' => 'medico@medico.com'],
+            [
+                'name' => 'Dr. Médico',
+                'password' => bcrypt('password'),
+                'role' => 'medico',
+                'email_verified_at' => now(),
+            ]
+        );
+
+        User::updateOrCreate(
+            ['email' => 'recepcion@recepcion.com'],
+            [
+                'name' => 'Recepcionista',
+                'password' => bcrypt('password'),
+                'role' => 'recepcion',
+                'email_verified_at' => now(),
+            ]
+        );
     }
 }

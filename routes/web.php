@@ -14,4 +14,16 @@ Route::middleware([
     Route::get('/dashboard', function () {
         return view('dashboard');
     })->name('dashboard');
+
+    Route::middleware('role:administrador')->get('/admin-panel', function () {
+        return view('admin.index');
+    })->name('admin.panel');
+
+    Route::middleware('role:medico')->get('/medico', function () {
+        return view('dashboard');
+    })->name('medico.dashboard');
+
+    Route::middleware('role:recepcion')->get('/recepcion', function () {
+        return view('dashboard');
+    })->name('recepcion.dashboard');
 });

@@ -2,6 +2,12 @@
     @php
         $user = Auth::user();
         $userName = $user ? $user->name : 'Usuario';
+        $userRole = $user?->role ?? 'recepcion';
+        $roleLabels = [
+            'administrador' => 'Administrador',
+            'medico' => 'Médico',
+            'recepcion' => 'Recepción',
+        ];
         $initials = collect(explode(' ', trim($userName)))
             ->take(2)
             ->map(fn ($part) => strtoupper(substr($part, 0, 1)))
@@ -101,7 +107,7 @@
                                 </div>
                                 <div>
                                     <p class="text-sm font-semibold text-[#191346]">{{ $userName }}</p>
-                                    <p class="text-xs text-[#5b678f]">Administrador</p>
+                                    <p class="text-xs text-[#5b678f]">{{ $roleLabels[$userRole] ?? 'Sin rol' }}</p>
                                 </div>
                             </div>
                         </div>
@@ -111,10 +117,10 @@
                 <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                     @php
                         $stats = [
-                            ['label' => 'Pacientes', 'value' => '1,284', 'trend' => '+12%', 'color' => 'bg-[#223FAA]'],
-                            ['label' => 'Citas hoy', 'value' => '48', 'trend' => '+8%', 'color' => 'bg-[#AC9FE2]'],
-                            ['label' => 'Médicos', 'value' => '24', 'trend' => '+3%', 'color' => 'bg-[#AAE2E2]'],
-                            ['label' => 'Agenda', 'value' => '92%', 'trend' => 'OK', 'color' => 'bg-[#191346]'],
+                            ['label' => 'Pacientes', 'value' => '0', 'trend' => '0%', 'color' => 'bg-[#223FAA]'],
+                            ['label' => 'Citas hoy', 'value' => '0', 'trend' => '0%', 'color' => 'bg-[#AC9FE2]'],
+                            ['label' => 'Médicos', 'value' => '0', 'trend' => '0%', 'color' => 'bg-[#AAE2E2]'],
+                            ['label' => 'Agenda', 'value' => '0%', 'trend' => 'OK', 'color' => 'bg-[#191346]'],
                         ];
                     @endphp
 
