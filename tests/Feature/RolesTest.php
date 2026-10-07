@@ -23,6 +23,23 @@ class RolesTest extends TestCase
         $this->assertFalse($user->hasRole('medico'));
     }
 
+    public function test_roles_have_the_expected_permissions(): void
+    {
+        $admin = User::factory()->create(['role' => 'administrador']);
+        $medico = User::factory()->create(['role' => 'medico']);
+        $recepcion = User::factory()->create(['role' => 'recepcion']);
+
+        $this->assertTrue($admin->hasPermission('gestionar_usuarios'));
+        $this->assertTrue($admin->hasPermission('visualizar_panel_principal'));
+        $this->assertTrue($medico->hasPermission('consultar_citas'));
+        $this->assertTrue($medico->hasPermission('consultar_historial_citas_pacientes'));
+        $this->assertTrue($recepcion->hasPermission('registrar_pacientes'));
+        $this->assertTrue($recepcion->hasPermission('programar_citas'));
+
+        $this->assertFalse($medico->hasPermission('gestionar_usuarios'));
+        $this->assertFalse($recepcion->hasPermission('consultar_panel_principal_medico'));
+    }
+
     public function test_non_admin_user_cannot_access_admin_routes(): void
     {
         $user = User::factory()->create([

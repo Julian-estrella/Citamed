@@ -8,6 +8,28 @@
             'medico' => 'Médico',
             'recepcion' => 'Recepción',
         ];
+        $userPermissions = $user?->permissions() ?? [];
+        $permissionLabels = [
+            'gestionar_usuarios' => 'Gestionar usuarios',
+            'gestionar_pacientes' => 'Gestionar pacientes',
+            'gestionar_medicos' => 'Gestionar médicos',
+            'gestionar_citas' => 'Gestionar citas',
+            'consultar_agenda' => 'Consultar agenda',
+            'visualizar_panel_principal' => 'Visualizar panel principal',
+            'consultar_citas' => 'Consultar sus citas',
+            'consultar_pacientes_que_atiende' => 'Consultar pacientes que atiende',
+            'gestionar_horario_atencion' => 'Gestionar horario de atención',
+            'gestionar_disponibilidad' => 'Gestionar disponibilidad',
+            'consultar_panel_principal_medico' => 'Consultar panel principal',
+            'consultar_historial_citas_pacientes' => 'Consultar historial de citas',
+            'registrar_pacientes' => 'Registrar pacientes',
+            'consultar_pacientes' => 'Consultar pacientes',
+            'modificar_pacientes' => 'Modificar pacientes',
+            'consultar_horarios_disponibles_medicos' => 'Consultar horarios disponibles',
+            'programar_citas' => 'Programar citas',
+            'modificar_citas' => 'Modificar citas',
+            'cancelar_citas' => 'Cancelar citas',
+        ];
         $initials = collect(explode(' ', trim($userName)))
             ->take(2)
             ->map(fn ($part) => strtoupper(substr($part, 0, 1)))
@@ -75,9 +97,11 @@
                 <div class="mt-10 rounded-2xl bg-white/5 p-4 backdrop-blur-sm">
                     <p class="text-xs uppercase tracking-[0.25em] text-[#C0CFED]">Permisos</p>
                     <div class="mt-3 flex flex-wrap gap-2">
-                        <span class="rounded-full bg-[#223FAA] px-2.5 py-1 text-xs font-medium text-white">Admin</span>
-                        <span class="rounded-full bg-[#AC9FE2] px-2.5 py-1 text-xs font-medium text-[#191346]">Médico</span>
-                        <span class="rounded-full bg-[#AAE2E2] px-2.5 py-1 text-xs font-medium text-[#191346]">Recepción</span>
+                        @foreach ($userPermissions as $permission)
+                            <span class="rounded-full bg-[#223FAA] px-2.5 py-1 text-[10px] font-medium text-white">
+                                {{ $permissionLabels[$permission] ?? ucfirst(str_replace('_', ' ', $permission)) }}
+                            </span>
+                        @endforeach
                     </div>
                 </div>
             </aside>

@@ -13,6 +13,12 @@ use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
+    public const ROLE_ADMINISTRADOR = 'administrador';
+
+    public const ROLE_MEDICO = 'medico';
+
+    public const ROLE_RECEPCION = 'recepcion';
+
     use HasApiTokens;
 
     /** @use HasFactory<UserFactory> */
@@ -76,18 +82,37 @@ class User extends Authenticatable
         return $currentRole === $requestedRole;
     }
 
+    public static function rolePermissions(?string $role): array
+    {
+        $roleKey = strtolower(trim((string) $role));
+
+        return config('roles.'.$roleKey.'.permissions', []);
+    }
+
+    public function permissions(): array
+    {
+        return self::rolePermissions($this->role);
+    }
+
+    public function hasPermission(string $permission): bool
+    {
+        $requestedPermission = strtolower(trim($permission));
+
+        return in_array($requestedPermission, $this->permissions(), true);
+    }
+
     public function isAdmin(): bool
     {
-        return $this->hasRole('administrador');
+        return $this->hasRole(self::ROLE_ADMINISTRADOR);
     }
 
     public function isMedico(): bool
     {
-        return $this->hasRole('medico');
+        return $this->hasRole(self::ROLE_MEDICO);
     }
 
     public function isRecepcion(): bool
     {
-        return $this->hasRole('recepcion');
+        return $this->hasRole(self::ROLE_RECEPCION);
     }
 }
