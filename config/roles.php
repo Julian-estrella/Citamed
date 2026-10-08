@@ -11,6 +11,20 @@ return [
             'consultar_agenda',
             'visualizar_panel_principal',
         ],
+        'panels' => [
+            [
+                'key' => 'admin.panel',
+                'label' => 'Panel administrativo',
+                'route' => 'admin.panel',
+                'permission' => 'visualizar_panel_principal',
+            ],
+            [
+                'key' => 'admin.users',
+                'label' => 'Usuarios',
+                'route' => 'admin.users',
+                'permission' => 'gestionar_usuarios',
+            ],
+        ],
     ],
     'medico' => [
         'label' => 'Médico',
@@ -21,6 +35,14 @@ return [
             'gestionar_disponibilidad',
             'consultar_panel_principal_medico',
             'consultar_historial_citas_pacientes',
+        ],
+        'panels' => [
+            [
+                'key' => 'medico.dashboard',
+                'label' => 'Panel médico',
+                'route' => 'medico.dashboard',
+                'permission' => 'consultar_panel_principal_medico',
+            ],
         ],
     ],
     'recepcion' => [
@@ -35,6 +57,14 @@ return [
             'programar_citas',
             'modificar_citas',
             'cancelar_citas',
+        ],
+        'panels' => [
+            [
+                'key' => 'recepcion.dashboard',
+                'label' => 'Panel de recepción',
+                'route' => 'recepcion.dashboard',
+                'permission' => 'consultar_agenda',
+            ],
         ],
     ],
 ];

@@ -101,6 +101,33 @@ class User extends Authenticatable
         return in_array($requestedPermission, $this->permissions(), true);
     }
 
+    public function availablePanels(): array
+    {
+        $role = strtolower((string) ($this->role ?? ''));
+        $panels = config('roles.'.$role.'.panels', []);
+
+        return collect($panels)
+            ->filter(fn (array $panel) => ! isset($panel['permission']) || $this->hasPermission($panel['permission']))
+            ->values()
+            ->all();
+    }
+
+    public function canAccessPanel(string $panelKey): bool
+    {
+        return collect($this->availablePanels())
+            ->contains(fn (array $panel) => ($panel['key'] ?? $panel['route'] ?? '') === $panelKey);
+    }
+
+    public function defaultDashboardRoute(): ?string
+    {
+        $panels = collect($this->availablePanels())
+            ->filter(fn (array $panel) => ($panel['route'] ?? '') !== 'dashboard')
+            ->values()
+            ->all();
+
+        return $panels[0]['route'] ?? 'dashboard';
+    }
+
     public function isAdmin(): bool
     {
         return $this->hasRole(self::ROLE_ADMINISTRADOR);

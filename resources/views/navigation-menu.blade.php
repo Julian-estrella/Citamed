@@ -12,9 +12,19 @@
 
                 <!-- Navigation Links -->
                 <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
+                    @php
+                        $allowedPanels = Auth::user()?->availablePanels() ?? [];
+                    @endphp
+
                     <x-nav-link href="{{ route('dashboard') }}" :active="request()->routeIs('dashboard')">
                         {{ __('Dashboard') }}
                     </x-nav-link>
+
+                    @foreach ($allowedPanels as $panel)
+                        <x-nav-link href="{{ route($panel['route']) }}" :active="request()->routeIs($panel['key'])">
+                            {{ $panel['label'] }}
+                        </x-nav-link>
+                    @endforeach
                 </div>
             </div>
 
@@ -142,6 +152,12 @@
             <x-responsive-nav-link href="{{ route('dashboard') }}" :active="request()->routeIs('dashboard')">
                 {{ __('Dashboard') }}
             </x-responsive-nav-link>
+
+            @foreach (Auth::user()?->availablePanels() ?? [] as $panel)
+                <x-responsive-nav-link href="{{ route($panel['route']) }}" :active="request()->routeIs($panel['key'])">
+                    {{ $panel['label'] }}
+                </x-responsive-nav-link>
+            @endforeach
         </div>
 
         <!-- Responsive Settings Options -->
