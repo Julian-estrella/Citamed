@@ -33,4 +33,63 @@ class RoleAccessTest extends TestCase
         $this->assertTrue($recepcionista->canAccessPanel('recepcion.dashboard'));
         $this->assertFalse($recepcionista->canAccessPanel('admin.panel'));
     }
+
+    public function test_dashboard_redirects_each_role_to_its_own_panel(): void
+    {
+        $roles = [
+            'administrador' => 'admin.panel',
+            'medico' => 'medico.dashboard',
+            'recepcion' => 'recepcion.dashboard',
+        ];
+
+        foreach ($roles as $role => $panelRoute) {
+            $user = User::factory()->create(['role' => $role]);
+
+            $this->actingAs($user)
+                ->get(route('dashboard'))
+                ->assertRedirect(route($panelRoute));
+        }
+    }
+
+    public function test_reception_dashboard_shows_only_actions_allowed_by_its_permissions(): void
+    {
+        $recepcionista = User::factory()->create(['role' => 'recepcion']);
+
+        $this->actingAs($recepcionista)
+            ->get(route('recepcion.dashboard'))
+            ->assertOk()
+            ->assertSee('Registrar paciente')
+            ->assertSee('Programar cita')
+            ->assertSee('Consultar horarios')
+            ->assertDontSee('Gestión de usuarios');
+    }
+
+    public function test_doctor_dashboard_shows_profile_menu_and_permitted_actions(): void
+    {
+        $doctor = User::factory()->create(['role' => 'medico']);
+
+        $this->actingAs($doctor)
+            ->get(route('medico.dashboard'))
+            ->assertOk()
+            ->assertSee($doctor->name)
+            ->assertSee('Médico')
+            ->assertSee('Modificar usuario')
+            ->assertSee('Cerrar sesión')
+            ->assertSee('Mis citas')
+            ->assertSee('Gestionar horario')
+            ->assertDontSee('Registrar paciente');
+    }
+
+    public function test_reception_dashboard_shows_profile_menu(): void
+    {
+        $recepcionista = User::factory()->create(['role' => 'recepcion']);
+
+        $this->actingAs($recepcionista)
+            ->get(route('recepcion.dashboard'))
+            ->assertOk()
+            ->assertSee($recepcionista->name)
+            ->assertSee('Recepción')
+            ->assertSee('Modificar usuario')
+            ->assertSee('Cerrar sesión');
+    }
 }

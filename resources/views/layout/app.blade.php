@@ -3,30 +3,31 @@
     $role = $user?->role ?? 'recepcion';
     $navigation = [
         'administrador' => [
-            ['label' => 'Inicio', 'route' => route('admin.panel'), 'icon' => '⌂'],
-            ['label' => 'Panel principal', 'route' => route('admin.panel'), 'icon' => '▣'],
-            ['label' => 'Gestión de usuarios', 'route' => route('admin.users'), 'icon' => '👥'],
-            ['label' => 'Pacientes', 'route' => '#', 'icon' => '🩺'],
-            ['label' => 'Médicos', 'route' => '#', 'icon' => '👨‍⚕️'],
-            ['label' => 'Citas', 'route' => '#', 'icon' => '📅'],
-            ['label' => 'Agenda', 'route' => '#', 'icon' => '🕒'],
+            ['label' => 'Inicio', 'route' => route('admin.panel'), 'icon' => 'fa-solid fa-house', 'permission' => 'visualizar_panel_principal'],
+            ['label' => 'Gestión de usuarios', 'route' => route('admin.users'), 'icon' => 'fa-solid fa-users', 'permission' => 'gestionar_usuarios'],
+            ['label' => 'Pacientes', 'route' => '#', 'icon' => 'fa-solid fa-user-injured', 'permission' => 'gestionar_pacientes'],
+            ['label' => 'Médicos', 'route' => '#', 'icon' => 'fa-solid fa-user-doctor', 'permission' => 'gestionar_medicos'],
+            ['label' => 'Citas', 'route' => '#', 'icon' => 'fa-solid fa-calendar-check', 'permission' => 'gestionar_citas'],
+            ['label' => 'Agenda', 'route' => '#', 'icon' => 'fa-solid fa-clock', 'permission' => 'consultar_agenda'],
         ],
         'medico' => [
-            ['label' => 'Inicio', 'route' => route('medico.dashboard'), 'icon' => '⌂'],
-            ['label' => 'Mis citas', 'route' => '#', 'icon' => '📅'],
-            ['label' => 'Pacientes', 'route' => '#', 'icon' => '🩺'],
-            ['label' => 'Horario', 'route' => '#', 'icon' => '🕘'],
-            ['label' => 'Disponibilidad', 'route' => '#', 'icon' => '✅'],
+            ['label' => 'Inicio', 'route' => route('medico.dashboard'), 'icon' => 'fa-solid fa-house', 'permission' => 'consultar_panel_principal_medico'],
+            ['label' => 'Mis citas', 'route' => '#', 'icon' => 'fa-solid fa-calendar-check', 'permission' => 'consultar_citas'],
+            ['label' => 'Pacientes', 'route' => '#', 'icon' => 'fa-solid fa-user-injured', 'permission' => 'consultar_pacientes_que_atiende'],
+            ['label' => 'Horario', 'route' => '#', 'icon' => 'fa-solid fa-clock', 'permission' => 'gestionar_horario_atencion'],
+            ['label' => 'Disponibilidad', 'route' => '#', 'icon' => 'fa-solid fa-check-circle', 'permission' => 'gestionar_disponibilidad'],
         ],
         'recepcion' => [
-            ['label' => 'Inicio', 'route' => route('recepcion.dashboard'), 'icon' => '⌂'],
-            ['label' => 'Pacientes', 'route' => '#', 'icon' => '🩺'],
-            ['label' => 'Citas', 'route' => '#', 'icon' => '📅'],
-            ['label' => 'Agenda', 'route' => '#', 'icon' => '🕒'],
-            ['label' => 'Horarios médicos', 'route' => '#', 'icon' => '🗓️'],
+            ['label' => 'Inicio', 'route' => route('recepcion.dashboard'), 'icon' => 'fa-solid fa-house', 'permission' => 'consultar_agenda'],
+            ['label' => 'Pacientes', 'route' => '#', 'icon' => 'fa-solid fa-user-injured', 'permission' => 'consultar_pacientes'],
+            ['label' => 'Citas', 'route' => '#', 'icon' => 'fa-solid fa-calendar-check', 'permission' => 'gestionar_citas'],
+            ['label' => 'Agenda', 'route' => '#', 'icon' => 'fa-solid fa-calendar-days', 'permission' => 'consultar_agenda'],
+            ['label' => 'Horarios médicos', 'route' => '#', 'icon' => 'fa-solid fa-clipboard-list', 'permission' => 'consultar_horarios_disponibles_medicos'],
         ],
     ];
-    $menu = $navigation[$role] ?? $navigation['recepcion'];
+    $menu = collect($navigation[$role] ?? $navigation['recepcion'])
+        ->filter(fn (array $item) => $user?->hasPermission($item['permission']) ?? false)
+        ->values();
 @endphp
 
 <!DOCTYPE html>
@@ -35,6 +36,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Citamed</title>
+    <script src="https://kit.fontawesome.com/bb9452ddb0.js" crossorigin="anonymous"></script>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
 <body class="bg-slate-100 text-slate-800 antialiased">
@@ -56,7 +58,7 @@
                         $isActive = request()->url() === $item['route'] || (str_contains(request()->path(), 'dashboard') && $item['label'] === 'Inicio');
                     @endphp
                     <a href="{{ $item['route'] }}" class="flex items-center gap-3 rounded-2xl px-3 py-3 text-sm font-medium transition {{ $isActive ? 'bg-[#223FAA] text-white shadow-lg shadow-[#223FAA]/20' : 'text-slate-200 hover:bg-white/5 hover:text-white' }}">
-                        <span class="flex h-8 w-8 items-center justify-center rounded-xl bg-white/5 text-base">{{ $item['icon'] }}</span>
+                        <span class="flex h-8 w-8 items-center justify-center rounded-xl bg-white/5 text-base"><i class="{{ $item['icon'] }}"></i></span>
                         {{ $item['label'] }}
                     </a>
                 @endforeach

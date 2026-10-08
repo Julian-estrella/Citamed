@@ -38,6 +38,7 @@ class User extends Authenticatable
         'email',
         'password',
         'role',
+        'is_active',
     ];
 
     /**
@@ -120,12 +121,22 @@ class User extends Authenticatable
 
     public function defaultDashboardRoute(): ?string
     {
-        $panels = collect($this->availablePanels())
-            ->filter(fn (array $panel) => ($panel['route'] ?? '') !== 'dashboard')
-            ->values()
-            ->all();
+        return match (strtolower((string) ($this->role ?? ''))) {
+            self::ROLE_ADMINISTRADOR => 'admin.panel',
+            self::ROLE_MEDICO => 'medico.dashboard',
+            self::ROLE_RECEPCION => 'recepcion.dashboard',
+            default => null,
+        };
+    }
 
-        return $panels[0]['route'] ?? 'dashboard';
+    public function isActive(): bool
+    {
+        return (bool) ($this->is_active ?? true);
+    }
+
+    public function statusLabel(): string
+    {
+        return $this->isActive() ? 'Activo' : 'Inactivo';
     }
 
     public function isAdmin(): bool
