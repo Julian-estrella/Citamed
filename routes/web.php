@@ -1,6 +1,8 @@
 <?php
 
 use App\Http\Controllers\Admin\UserManagementController;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\PanelSectionController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
@@ -29,9 +31,7 @@ Route::middleware([
     })->name('dashboard');
 
     Route::middleware(['role:administrador', 'permission:visualizar_panel_principal'])->group(function () {
-        Route::get('/admin-panel', function () {
-            return view('layout.admin.index');
-        })->name('admin.panel');
+        Route::get('/admin-panel', [DashboardController::class, 'admin'])->name('admin.panel');
 
         Route::get('/admin/users/dashboard', [UserManagementController::class, 'dashboard'])->name('admin.users.dashboard');
         Route::get('/admin/users/actions', [UserManagementController::class, 'actions'])->name('admin.users.actions');
@@ -42,17 +42,56 @@ Route::middleware([
         Route::put('/admin/users/{user}', [UserManagementController::class, 'update'])->name('admin.users.update');
         Route::patch('/admin/users/{user}/toggle-status', [UserManagementController::class, 'toggleStatus'])->name('admin.users.toggle-status');
         Route::delete('/admin/users/{user}', [UserManagementController::class, 'destroy'])->name('admin.users.destroy');
+
+        Route::get('/admin/pacientes', [PanelSectionController::class, 'patients'])
+            ->middleware('permission:gestionar_pacientes')->name('admin.patients');
+        Route::post('/admin/pacientes', [PanelSectionController::class, 'storePatient'])
+            ->middleware('permission:gestionar_pacientes')->name('admin.patients.store');
+        Route::patch('/admin/pacientes/{patient}/toggle-status', [PanelSectionController::class, 'togglePatient'])
+            ->middleware('permission:gestionar_pacientes')->name('admin.patients.toggle-status');
+        Route::get('/admin/medicos', [PanelSectionController::class, 'doctors'])
+            ->middleware('permission:gestionar_medicos')->name('admin.doctors');
+        Route::get('/admin/citas', [PanelSectionController::class, 'appointments'])
+            ->middleware('permission:gestionar_citas')->name('admin.appointments');
+        Route::post('/admin/citas', [PanelSectionController::class, 'storeAppointment'])
+            ->middleware('permission:gestionar_citas')->name('admin.appointments.store');
+        Route::patch('/admin/citas/{appointment}/cancel', [PanelSectionController::class, 'cancelAppointment'])
+            ->middleware('permission:gestionar_citas')->name('admin.appointments.cancel');
+        Route::get('/admin/agenda', [PanelSectionController::class, 'agenda'])
+            ->middleware('permission:consultar_agenda')->name('admin.agenda');
     });
 
     Route::middleware(['role:medico', 'permission:consultar_panel_principal_medico'])->group(function () {
-        Route::get('/medico', function () {
-            return view('layout.medico.index');
-        })->name('medico.dashboard');
+        Route::get('/medico', [DashboardController::class, 'doctor'])->name('medico.dashboard');
     });
 
     Route::middleware(['role:recepcion', 'permission:consultar_agenda'])->group(function () {
-        Route::get('/recepcion', function () {
-            return view('layout.recepcion.index');
-        })->name('recepcion.dashboard');
+        Route::get('/recepcion', [DashboardController::class, 'reception'])->name('recepcion.dashboard');
     });
+
+    Route::get('/medico/pacientes', [PanelSectionController::class, 'patients'])
+        ->middleware(['role:medico', 'permission:consultar_pacientes_que_atiende'])->name('medico.patients');
+    Route::get('/medico/citas', [PanelSectionController::class, 'appointments'])
+        ->middleware(['role:medico', 'permission:consultar_citas'])->name('medico.appointments');
+    Route::get('/medico/agenda', [PanelSectionController::class, 'agenda'])
+        ->middleware(['role:medico', 'permission:gestionar_horario_atencion'])->name('medico.agenda');
+    Route::get('/medico/disponibilidad', [PanelSectionController::class, 'availability'])
+        ->middleware(['role:medico', 'permission:gestionar_disponibilidad'])->name('medico.availability');
+
+    Route::get('/recepcion/pacientes', [PanelSectionController::class, 'patients'])
+        ->middleware(['role:recepcion', 'permission:consultar_pacientes'])->name('recepcion.patients');
+    Route::post('/recepcion/pacientes', [PanelSectionController::class, 'storePatient'])
+        ->middleware(['role:recepcion', 'permission:registrar_pacientes'])->name('recepcion.patients.store');
+    Route::patch('/recepcion/pacientes/{patient}/toggle-status', [PanelSectionController::class, 'togglePatient'])
+        ->middleware(['role:recepcion', 'permission:modificar_pacientes'])->name('recepcion.patients.toggle-status');
+    Route::get('/recepcion/medicos', [PanelSectionController::class, 'doctors'])
+        ->middleware(['role:recepcion', 'permission:consultar_horarios_disponibles_medicos'])->name('recepcion.doctors');
+    Route::get('/recepcion/citas', [PanelSectionController::class, 'appointments'])
+        ->middleware(['role:recepcion', 'permission:gestionar_citas'])->name('recepcion.appointments');
+    Route::post('/recepcion/citas', [PanelSectionController::class, 'storeAppointment'])
+        ->middleware(['role:recepcion', 'permission:programar_citas'])->name('recepcion.appointments.store');
+    Route::patch('/recepcion/citas/{appointment}/cancel', [PanelSectionController::class, 'cancelAppointment'])
+        ->middleware(['role:recepcion', 'permission:cancelar_citas'])->name('recepcion.appointments.cancel');
+    Route::get('/recepcion/agenda', [PanelSectionController::class, 'agenda'])
+        ->middleware(['role:recepcion', 'permission:consultar_agenda'])->name('recepcion.agenda');
 });

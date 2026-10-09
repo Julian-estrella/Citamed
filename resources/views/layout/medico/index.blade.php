@@ -6,11 +6,11 @@
         $userName = $user?->name ?? 'Médico';
         $roleLabel = 'Médico';
         $quickActions = [
-            ['permission' => 'consultar_citas', 'label' => 'Mis citas', 'description' => 'Consultar las citas asignadas', 'icon' => 'fa-solid fa-calendar-check'],
-            ['permission' => 'consultar_pacientes_que_atiende', 'label' => 'Mis pacientes', 'description' => 'Consultar los pacientes asignados', 'icon' => 'fa-solid fa-user-injured'],
-            ['permission' => 'gestionar_horario_atencion', 'label' => 'Gestionar horario', 'description' => 'Actualizar tu horario de atención', 'icon' => 'fa-solid fa-clock'],
-            ['permission' => 'gestionar_disponibilidad', 'label' => 'Disponibilidad', 'description' => 'Administrar tus espacios disponibles', 'icon' => 'fa-solid fa-calendar-plus'],
-            ['permission' => 'consultar_historial_citas_pacientes', 'label' => 'Historial de citas', 'description' => 'Revisar citas anteriores de pacientes', 'icon' => 'fa-solid fa-file-medical'],
+            ['permission' => 'consultar_citas', 'label' => 'Mis citas', 'description' => 'Consultar las citas asignadas', 'icon' => 'fa-solid fa-calendar-check', 'route' => route('medico.appointments')],
+            ['permission' => 'consultar_pacientes_que_atiende', 'label' => 'Mis pacientes', 'description' => 'Consultar los pacientes asignados', 'icon' => 'fa-solid fa-user-injured', 'route' => route('medico.patients')],
+            ['permission' => 'gestionar_horario_atencion', 'label' => 'Gestionar horario', 'description' => 'Consultar tu agenda diaria', 'icon' => 'fa-solid fa-clock', 'route' => route('medico.agenda')],
+            ['permission' => 'gestionar_disponibilidad', 'label' => 'Disponibilidad', 'description' => 'Administrar tus espacios disponibles', 'icon' => 'fa-solid fa-calendar-plus', 'route' => route('medico.availability')],
+            ['permission' => 'consultar_historial_citas_pacientes', 'label' => 'Historial de citas', 'description' => 'Revisar citas anteriores de pacientes', 'icon' => 'fa-solid fa-file-medical', 'route' => route('medico.appointments')],
         ];
         $availableActions = collect($quickActions)
             ->filter(fn (array $action) => $user?->hasPermission($action['permission']) ?? false);
@@ -30,19 +30,13 @@
             @if ($user?->hasPermission('consultar_citas'))
                 <article class="rounded-2xl bg-[#223FAA] p-5 text-white">
                     <p class="text-sm text-white/80">Citas de hoy</p>
-                    <p class="mt-3 text-3xl font-bold">07</p>
+                    <p class="mt-3 text-3xl font-bold">{{ number_format($todayAppointmentCount) }}</p>
                 </article>
             @endif
             @if ($user?->hasPermission('consultar_pacientes_que_atiende'))
                 <article class="rounded-2xl bg-[#AC9FE2] p-5 text-[#191346]">
-                    <p class="text-sm opacity-80">Pacientes atendidos</p>
-                    <p class="mt-3 text-3xl font-bold">18</p>
-                </article>
-            @endif
-            @if ($user?->hasPermission('gestionar_disponibilidad'))
-                <article class="rounded-2xl bg-[#AAE2E2] p-5 text-[#191346]">
-                    <p class="text-sm opacity-80">Disponibilidad</p>
-                    <p class="mt-3 text-3xl font-bold">92%</p>
+                    <p class="text-sm opacity-80">Pacientes asignados</p>
+                    <p class="mt-3 text-3xl font-bold">{{ number_format($patientCount) }}</p>
                 </article>
             @endif
         </section>
@@ -58,23 +52,17 @@
                         <i class="fa-solid fa-calendar-check text-xl text-[#223FAA]"></i>
                     </div>
                     <div class="space-y-3">
-                        @php
-                            $schedule = [
-                                ['time' => '08:30', 'patient' => 'Andrea López', 'type' => 'Consulta general'],
-                                ['time' => '10:15', 'patient' => 'José García', 'type' => 'Control cardiaco'],
-                                ['time' => '15:40', 'patient' => 'Sofía Ruiz', 'type' => 'Dolor de espalda'],
-                            ];
-                        @endphp
-
-                        @foreach ($schedule as $item)
+                        @forelse ($todayAppointments as $appointment)
                             <div class="flex items-center justify-between rounded-xl bg-white p-3 ring-1 ring-slate-200">
                                 <div>
-                                    <p class="font-semibold text-[#191346]">{{ $item['patient'] }}</p>
-                                    <p class="text-sm text-slate-500">{{ $item['type'] }}</p>
+                                    <p class="font-semibold text-[#191346]">{{ $appointment->patient->name }}</p>
+                                    <p class="text-sm text-slate-500">{{ $appointment->reason ?: 'Consulta' }}</p>
                                 </div>
-                                <span class="rounded-full bg-[#EAFBF7] px-2.5 py-1 text-xs font-semibold text-[#0f766e]">{{ $item['time'] }}</span>
+                                <span class="rounded-full bg-[#EAFBF7] px-2.5 py-1 text-xs font-semibold text-[#0f766e]">{{ $appointment->scheduled_at->format('H:i') }}</span>
                             </div>
-                        @endforeach
+                        @empty
+                            <p class="rounded-xl bg-white p-4 text-sm text-slate-500">No tienes citas activas para hoy.</p>
+                        @endforelse
                     </div>
                 </article>
             @endif
@@ -91,13 +79,13 @@
                 @if ($availableActions->isNotEmpty())
                     <div class="space-y-2">
                         @foreach ($availableActions as $action)
-                            <div class="flex items-center gap-3 rounded-xl bg-slate-50 p-3">
+                            <a href="{{ $action['route'] }}" class="flex items-center gap-3 rounded-xl bg-slate-50 p-3 transition hover:bg-[#eef3ff]">
                                 <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#eef3ff] text-[#223FAA]"><i class="{{ $action['icon'] }}"></i></span>
                                 <div>
                                     <p class="text-sm font-semibold text-slate-800">{{ $action['label'] }}</p>
                                     <p class="text-xs text-slate-500">{{ $action['description'] }}</p>
                                 </div>
-                            </div>
+                            </a>
                         @endforeach
                     </div>
                 @else

@@ -16,10 +16,6 @@
                 <h2 class="mt-2 text-3xl font-bold text-[#191346]">Gestión de usuarios</h2>
             </div>
             <div class="flex items-center gap-3">
-                <a href="{{ route('admin.users.dashboard') }}" class="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700">
-                    <i class="fa-solid fa-gauge-high"></i>
-                    Dashboard
-                </a>
                 <a href="{{ route('admin.users.create') }}" class="inline-flex items-center gap-2 rounded-2xl bg-[#223FAA] px-4 py-2 text-sm font-semibold text-white shadow-md shadow-[#223FAA]/20">
                     <i class="fa-solid fa-user-plus"></i>
                     Nuevo usuario

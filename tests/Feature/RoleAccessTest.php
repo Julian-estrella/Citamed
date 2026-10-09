@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use App\Models\Appointment;
+use App\Models\Patient;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -91,5 +93,106 @@ class RoleAccessTest extends TestCase
             ->assertSee('Recepción')
             ->assertSee('Modificar usuario')
             ->assertSee('Cerrar sesión');
+    }
+
+    public function test_section_routes_are_limited_to_roles_with_the_required_permissions(): void
+    {
+        $admin = User::factory()->create(['role' => 'administrador']);
+        $doctor = User::factory()->create(['role' => 'medico']);
+        $reception = User::factory()->create(['role' => 'recepcion']);
+
+        $this->actingAs($admin)->get(route('admin.panel'))
+            ->assertOk()
+            ->assertSee('Panel administrativo')
+            ->assertSee('Gestión de usuarios')
+            ->assertSee('Pacientes')
+            ->assertSee('Médicos')
+            ->assertSee('Citas')
+            ->assertSee('Agenda');
+        $this->actingAs($admin)->get(route('admin.patients'))->assertOk()->assertSee('No hay pacientes para mostrar');
+        $this->actingAs($admin)->get(route('admin.doctors'))->assertOk();
+        $this->actingAs($admin)->get(route('admin.appointments'))->assertOk();
+        $this->actingAs($admin)->get(route('admin.agenda'))->assertOk();
+
+        $this->actingAs($doctor)->get(route('medico.patients'))->assertOk()->assertSee('Mis pacientes');
+        $this->actingAs($doctor)->get(route('medico.appointments'))->assertOk()->assertSee('Mis citas');
+        $this->actingAs($doctor)->get(route('medico.agenda'))->assertOk();
+        $this->actingAs($doctor)->get(route('medico.availability'))->assertOk();
+        $this->actingAs($doctor)->get(route('admin.patients'))->assertForbidden();
+
+        $this->actingAs($reception)->get(route('recepcion.patients'))->assertOk();
+        $this->actingAs($reception)->get(route('recepcion.doctors'))->assertOk();
+        $this->actingAs($reception)->get(route('recepcion.appointments'))->assertOk();
+        $this->actingAs($reception)->get(route('recepcion.agenda'))->assertOk();
+        $this->actingAs($reception)->get(route('medico.patients'))->assertForbidden();
+    }
+
+    public function test_dashboard_counts_and_lists_follow_active_patients_and_today_appointments(): void
+    {
+        $admin = User::factory()->create(['role' => 'administrador']);
+        $doctor = User::factory()->create(['role' => 'medico', 'name' => 'Doctora Activa']);
+        $patient = Patient::create(['name' => 'Paciente Dinamico', 'is_active' => true]);
+        $appointment = Appointment::create([
+            'patient_id' => $patient->id,
+            'doctor_id' => $doctor->id,
+            'scheduled_at' => now()->startOfDay()->addHours(10),
+            'reason' => 'Control',
+            'status' => Appointment::STATUS_SCHEDULED,
+        ]);
+
+        $this->actingAs($admin)->get(route('admin.panel'))
+            ->assertOk()
+            ->assertSee('Paciente Dinamico')
+            ->assertSee('Doctora Activa')
+            ->assertSee('Pacientes activos')
+            ->assertSee('Citas hoy')
+            ->assertSee('Médicos activos');
+
+        $this->actingAs($admin)->patch(route('admin.patients.toggle-status', $patient))->assertRedirect();
+
+        $this->actingAs($admin)->get(route('admin.panel'))
+            ->assertOk()
+            ->assertDontSee('Paciente Dinamico');
+
+        $this->actingAs($admin)->patch(route('admin.appointments.cancel', $appointment))->assertRedirect();
+        $this->assertDatabaseHas('appointments', [
+            'id' => $appointment->id,
+            'status' => Appointment::STATUS_CANCELLED,
+        ]);
+    }
+
+    public function test_reception_can_register_patients_and_schedule_then_cancel_appointments(): void
+    {
+        $reception = User::factory()->create(['role' => 'recepcion']);
+        $doctor = User::factory()->create(['role' => 'medico']);
+
+        $this->actingAs($reception)->post(route('recepcion.patients.store'), [
+            'name' => 'Nuevo Paciente',
+            'email' => 'paciente@example.test',
+            'phone' => '55512345',
+        ])->assertRedirect(route('recepcion.patients'));
+
+        $patient = Patient::where('email', 'paciente@example.test')->firstOrFail();
+
+        $this->actingAs($reception)->post(route('recepcion.appointments.store'), [
+            'patient_id' => $patient->id,
+            'doctor_id' => $doctor->id,
+            'scheduled_at' => now()->addHour()->format('Y-m-d\\TH:i'),
+            'reason' => 'Consulta inicial',
+        ])->assertRedirect(route('recepcion.appointments'));
+
+        $appointment = Appointment::firstOrFail();
+        $this->assertDatabaseHas('appointments', [
+            'id' => $appointment->id,
+            'patient_id' => $patient->id,
+            'doctor_id' => $doctor->id,
+            'status' => Appointment::STATUS_SCHEDULED,
+        ]);
+
+        $this->actingAs($reception)->patch(route('recepcion.appointments.cancel', $appointment))->assertRedirect();
+        $this->assertDatabaseHas('appointments', [
+            'id' => $appointment->id,
+            'status' => Appointment::STATUS_CANCELLED,
+        ]);
     }
 }
