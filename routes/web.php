@@ -45,10 +45,20 @@ Route::middleware([
 
         Route::get('/admin/pacientes', [PanelSectionController::class, 'patients'])
             ->middleware('permission:gestionar_pacientes')->name('admin.patients');
+        Route::get('/admin/pacientes/create', [PanelSectionController::class, 'createPatient'])
+            ->middleware('permission:gestionar_pacientes')->name('admin.patients.create');
         Route::post('/admin/pacientes', [PanelSectionController::class, 'storePatient'])
             ->middleware('permission:gestionar_pacientes')->name('admin.patients.store');
+        Route::get('/admin/pacientes/{patient}', [PanelSectionController::class, 'showPatient'])
+            ->middleware('permission:gestionar_pacientes')->name('admin.patients.show');
+        Route::get('/admin/pacientes/{patient}/edit', [PanelSectionController::class, 'editPatient'])
+            ->middleware('permission:gestionar_pacientes')->name('admin.patients.edit');
+        Route::put('/admin/pacientes/{patient}', [PanelSectionController::class, 'updatePatient'])
+            ->middleware('permission:gestionar_pacientes')->name('admin.patients.update');
         Route::patch('/admin/pacientes/{patient}/toggle-status', [PanelSectionController::class, 'togglePatient'])
             ->middleware('permission:gestionar_pacientes')->name('admin.patients.toggle-status');
+        Route::delete('/admin/pacientes/{patient}', [PanelSectionController::class, 'destroyPatient'])
+            ->middleware('permission:gestionar_pacientes')->name('admin.patients.destroy');
         Route::get('/admin/medicos', [PanelSectionController::class, 'doctors'])
             ->middleware('permission:gestionar_medicos')->name('admin.doctors');
         Route::get('/admin/citas', [PanelSectionController::class, 'appointments'])
@@ -71,6 +81,8 @@ Route::middleware([
 
     Route::get('/medico/pacientes', [PanelSectionController::class, 'patients'])
         ->middleware(['role:medico', 'permission:consultar_pacientes_que_atiende'])->name('medico.patients');
+    Route::get('/medico/pacientes/{patient}', [PanelSectionController::class, 'showPatient'])
+        ->middleware(['role:medico', 'permission:consultar_pacientes_que_atiende'])->name('medico.patients.show');
     Route::get('/medico/citas', [PanelSectionController::class, 'appointments'])
         ->middleware(['role:medico', 'permission:consultar_citas'])->name('medico.appointments');
     Route::get('/medico/agenda', [PanelSectionController::class, 'agenda'])
@@ -80,8 +92,16 @@ Route::middleware([
 
     Route::get('/recepcion/pacientes', [PanelSectionController::class, 'patients'])
         ->middleware(['role:recepcion', 'permission:consultar_pacientes'])->name('recepcion.patients');
+    Route::get('/recepcion/pacientes/create', [PanelSectionController::class, 'createPatient'])
+        ->middleware(['role:recepcion', 'permission:registrar_pacientes'])->name('recepcion.patients.create');
     Route::post('/recepcion/pacientes', [PanelSectionController::class, 'storePatient'])
         ->middleware(['role:recepcion', 'permission:registrar_pacientes'])->name('recepcion.patients.store');
+    Route::get('/recepcion/pacientes/{patient}', [PanelSectionController::class, 'showPatient'])
+        ->middleware(['role:recepcion', 'permission:consultar_pacientes'])->name('recepcion.patients.show');
+    Route::get('/recepcion/pacientes/{patient}/edit', [PanelSectionController::class, 'editPatient'])
+        ->middleware(['role:recepcion', 'permission:modificar_pacientes'])->name('recepcion.patients.edit');
+    Route::put('/recepcion/pacientes/{patient}', [PanelSectionController::class, 'updatePatient'])
+        ->middleware(['role:recepcion', 'permission:modificar_pacientes'])->name('recepcion.patients.update');
     Route::patch('/recepcion/pacientes/{patient}/toggle-status', [PanelSectionController::class, 'togglePatient'])
         ->middleware(['role:recepcion', 'permission:modificar_pacientes'])->name('recepcion.patients.toggle-status');
     Route::get('/recepcion/medicos', [PanelSectionController::class, 'doctors'])

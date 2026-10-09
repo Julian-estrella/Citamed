@@ -42,11 +42,12 @@
                     <p class="text-sm text-slate-500">Consultar, buscar, editar y gestionar acceso</p>
                 </div>
 
-                <form method="GET" action="{{ route('admin.users') }}" class="flex items-center gap-2">
+                <form id="user-filters" method="GET" action="{{ route('admin.users') }}" class="flex items-center gap-2">
                     <input type="text" name="search" value="{{ $search ?? '' }}" placeholder="Buscar usuario..." class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-[#223FAA] md:w-64">
                     <button type="submit" class="rounded-2xl bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700">
                         <i class="fa-solid fa-magnifying-glass"></i>
                     </button>
+                    <a href="{{ route('admin.users') }}" class="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600">Limpiar</a>
                 </form>
             </div>
 
@@ -59,6 +60,26 @@
                             <th class="px-4 py-3 font-semibold">Rol</th>
                             <th class="px-4 py-3 font-semibold">Estado</th>
                             <th class="px-4 py-3 font-semibold text-right">Acciones</th>
+                        </tr>
+                        <tr class="border-t border-slate-200 bg-white">
+                            <th class="px-2 py-2"><input form="user-filters" type="search" name="name" value="{{ $filters['name'] ?? '' }}" placeholder="Filtrar nombre" aria-label="Filtrar por nombre" class="w-full min-w-28 rounded-lg border-slate-200 text-xs"></th>
+                            <th class="px-2 py-2"><input form="user-filters" type="search" name="email" value="{{ $filters['email'] ?? '' }}" placeholder="Filtrar correo" aria-label="Filtrar por correo" class="w-full min-w-32 rounded-lg border-slate-200 text-xs"></th>
+                            <th class="px-2 py-2">
+                                <select form="user-filters" name="role" aria-label="Filtrar por rol" class="w-full min-w-32 rounded-lg border-slate-200 text-xs">
+                                    <option value="">Todos los roles</option>
+                                    <option value="administrador" @selected(($filters['role'] ?? '') === 'administrador')>Administrador</option>
+                                    <option value="medico" @selected(($filters['role'] ?? '') === 'medico')>Médico</option>
+                                    <option value="recepcion" @selected(($filters['role'] ?? '') === 'recepcion')>Recepción</option>
+                                </select>
+                            </th>
+                            <th class="px-2 py-2">
+                                <select form="user-filters" name="status" aria-label="Filtrar por estado" class="w-full min-w-28 rounded-lg border-slate-200 text-xs">
+                                    <option value="">Todos</option>
+                                    <option value="active" @selected(($filters['status'] ?? '') === 'active')>Activo</option>
+                                    <option value="inactive" @selected(($filters['status'] ?? '') === 'inactive')>Inactivo</option>
+                                </select>
+                            </th>
+                            <th></th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-200">
@@ -85,17 +106,15 @@
                                 </td>
                                 <td class="px-4 py-3">
                                     <div class="flex items-center justify-end gap-2">
-                                        <a href="{{ route('admin.users.edit', $userItem) }}" class="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-[#223FAA]">
+                                        <a href="{{ route('admin.users.edit', $userItem) }}" title="Editar usuario" aria-label="Editar usuario {{ $userItem->name }}" class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-[#223FAA]">
                                             <i class="fa-solid fa-pen-to-square"></i>
-                                            Editar
                                         </a>
 
                                         <form action="{{ route('admin.users.toggle-status', $userItem) }}" method="POST">
                                             @csrf
                                             @method('PATCH')
-                                            <button type="submit" class="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700">
+                                            <button type="submit" title="{{ $userItem->isActive() ? 'Desactivar usuario' : 'Activar usuario' }}" aria-label="{{ $userItem->isActive() ? 'Desactivar' : 'Activar' }} usuario {{ $userItem->name }}" class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700">
                                                 <i class="fa-solid {{ $userItem->isActive() ? 'fa-toggle-on' : 'fa-toggle-off' }}"></i>
-                                                {{ $userItem->isActive() ? 'Desactivar' : 'Activar' }}
                                             </button>
                                         </form>
 
@@ -103,9 +122,8 @@
                                             <form action="{{ route('admin.users.destroy', $userItem) }}" method="POST" onsubmit="return confirm('¿Deseas eliminar este usuario?');">
                                                 @csrf
                                                 @method('DELETE')
-                                                <button type="submit" class="inline-flex items-center gap-1 rounded-xl border border-red-200 bg-red-50 px-2.5 py-1.5 text-xs font-semibold text-red-600">
+                                                <button type="submit" title="Eliminar usuario" aria-label="Eliminar usuario {{ $userItem->name }}" class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600">
                                                     <i class="fa-solid fa-trash"></i>
-                                                    Eliminar
                                                 </button>
                                             </form>
                                         @endif

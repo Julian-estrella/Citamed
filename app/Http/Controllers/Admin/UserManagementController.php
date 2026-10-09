@@ -21,6 +21,12 @@ class UserManagementController extends Controller
     public function index(Request $request)
     {
         $query = User::query();
+        $filters = $request->validate([
+            'name' => ['nullable', 'string', 'max:255'],
+            'email' => ['nullable', 'string', 'max:255'],
+            'role' => ['nullable', 'in:administrador,medico,recepcion'],
+            'status' => ['nullable', 'in:active,inactive'],
+        ]);
 
         if ($request->filled('search')) {
             $search = $request->search;
@@ -30,11 +36,26 @@ class UserManagementController extends Controller
             });
         }
 
+        foreach (['name', 'email'] as $column) {
+            if (! empty($filters[$column])) {
+                $query->where($column, 'like', '%'.$filters[$column].'%');
+            }
+        }
+
+        if (! empty($filters['role'])) {
+            $query->where('role', $filters['role']);
+        }
+
+        if (! empty($filters['status'])) {
+            $query->where('is_active', $filters['status'] === 'active');
+        }
+
         $users = $query->latest()->get();
 
         return view('admin.users.index', [
             'users' => $users,
             'search' => $request->search,
+            'filters' => $filters,
         ]);
     }
 
