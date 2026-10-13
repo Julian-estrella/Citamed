@@ -4,7 +4,6 @@
     @php
         $user = Auth::user();
         $userName = $user?->name ?? 'Médico';
-        $roleLabel = 'Médico';
         $quickActions = [
             ['permission' => 'consultar_citas', 'label' => 'Mis citas', 'description' => 'Consultar las citas asignadas', 'icon' => 'fa-solid fa-calendar-check', 'route' => route('medico.appointments')],
             ['permission' => 'consultar_pacientes_que_atiende', 'label' => 'Mis pacientes', 'description' => 'Consultar los pacientes asignados', 'icon' => 'fa-solid fa-user-injured', 'route' => route('medico.patients')],
@@ -23,7 +22,6 @@
                 <h2 class="mt-2 text-3xl font-bold text-[#191346]">Bienvenido, {{ $userName }}</h2>
                 <p class="mt-1 text-sm text-slate-500">Agenda y herramientas de atención médica.</p>
             </div>
-            <x-user-profile-menu :user="$user" :user-name="$userName" :role-label="$roleLabel" />
         </header>
 
         <section class="grid gap-4 md:grid-cols-3">

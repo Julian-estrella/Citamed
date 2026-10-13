@@ -6,7 +6,7 @@
         $listRoute = $isAdmin ? 'admin.patients' : ($user->isMedico() ? 'medico.patients' : 'recepcion.patients');
         $editRoute = $isAdmin ? 'admin.patients.edit' : 'recepcion.patients.edit';
     @endphp
-
+    
     <div class="mx-auto flex w-full max-w-5xl flex-col gap-6">
         <header class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-4">
             <div>

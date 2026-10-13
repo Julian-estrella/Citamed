@@ -109,19 +109,34 @@ class RoleAccessTest extends TestCase
             ->assertSee('Médicos')
             ->assertSee('Citas')
             ->assertSee('Agenda');
-        $this->actingAs($admin)->get(route('admin.patients'))->assertOk()->assertSee('Pacientes registrados')->assertSee('Nuevo paciente');
+        $this->actingAs($admin)->get(route('admin.patients'))
+            ->assertOk()
+            ->assertSee('Pacientes registrados')
+            ->assertSee('Nuevo paciente')
+            ->assertSee('Hoy')
+            ->assertSee('Modificar usuario')
+            ->assertSee('bg-[#EFF5EC]');
         $this->actingAs($admin)->get(route('admin.patients.create'))->assertOk()->assertSee('Registrar paciente');
         $this->actingAs($admin)->get(route('admin.doctors'))->assertOk();
         $this->actingAs($admin)->get(route('admin.appointments'))->assertOk();
         $this->actingAs($admin)->get(route('admin.agenda'))->assertOk();
 
-        $this->actingAs($doctor)->get(route('medico.patients'))->assertOk()->assertSee('Mis pacientes');
+        $this->actingAs($doctor)->get(route('medico.patients'))
+            ->assertOk()
+            ->assertSee('Mis pacientes')
+            ->assertSee('Hoy')
+            ->assertSee('Cerrar sesión')
+            ->assertSee('bg-[#EFF5EC]');
         $this->actingAs($doctor)->get(route('medico.appointments'))->assertOk()->assertSee('Mis citas');
         $this->actingAs($doctor)->get(route('medico.agenda'))->assertOk();
         $this->actingAs($doctor)->get(route('medico.availability'))->assertOk();
         $this->actingAs($doctor)->get(route('admin.patients'))->assertForbidden();
 
-        $this->actingAs($reception)->get(route('recepcion.patients'))->assertOk();
+        $this->actingAs($reception)->get(route('recepcion.patients'))
+            ->assertOk()
+            ->assertSee('Hoy')
+            ->assertSee('Modificar usuario')
+            ->assertSee('bg-[#EFF5EC]');
         $this->actingAs($reception)->get(route('recepcion.patients.create'))->assertOk()->assertSee('Registrar paciente');
         $this->actingAs($reception)->get(route('recepcion.doctors'))->assertOk();
         $this->actingAs($reception)->get(route('recepcion.appointments'))->assertOk();
@@ -179,13 +194,19 @@ class RoleAccessTest extends TestCase
         ]);
 
         $this->actingAs($admin)->get(route('admin.users', [
-            'name' => 'Encontrado',
+            'search' => 'Encontrado',
             'role' => 'medico',
             'status' => 'active',
         ]))
             ->assertOk()
             ->assertSee('Medico Encontrado')
-            ->assertDontSee('Medico Excluido');
+            ->assertDontSee('Medico Excluido')
+            ->assertSee('Hoy')
+            ->assertSee('bg-[#F1EDF7]')
+            ->assertDontSee('Filtrar nombre')
+            ->assertDontSee('Filtrar correo')
+            ->assertSee('onchange="this.form.requestSubmit()"', false)
+            ->assertDontSee('Limpiar filtros');
 
         $this->get(route('admin.doctors', ['name' => 'Medico Encontrado']))
             ->assertOk()
@@ -208,15 +229,23 @@ class RoleAccessTest extends TestCase
             'is_active' => true,
         ]);
 
-        $this->get(route('admin.patients', [
-            'address' => 'Ejemplo',
+        $patientListResponse = $this->get(route('admin.patients', [
             'blood_type' => 'O+',
-            'gender' => 'Femenino',
             'status' => 'active',
         ]))
             ->assertOk()
             ->assertSee('Paciente Encontrado')
-            ->assertDontSee('Paciente Excluido');
+            ->assertDontSee('Paciente Excluido')
+            ->assertDontSee('Buscar pacientes')
+            ->assertDontSee('Más filtros del paciente')
+            ->assertSee('Filtrar por tipo de sangre')
+            ->assertSee('Filtrar por estado')
+            ->assertSee('onchange="this.form.requestSubmit()"', false)
+            ->assertDontSee('Aplicar filtros')
+            ->assertDontSee('Limpiar filtros')
+            ->assertSee('Acciones');
+
+        $this->assertSame(1, substr_count($patientListResponse->getContent(), 'title="Ver expediente"'));
 
         $doctor = User::factory()->create(['role' => 'medico', 'name' => 'Doctora Filtro']);
         $appointmentPatient = Patient::create(['name' => 'Paciente Cita Encontrada']);
@@ -343,13 +372,14 @@ class RoleAccessTest extends TestCase
         $this->actingAs($reception)->post(route('recepcion.patients.store'), [
             'name' => 'Nuevo Paciente',
             'email' => 'paciente@example.test',
-            'phone' => '55512345',
+            'phone' => '5551234567',
             'birth_date' => '1990-06-15',
             'gender' => 'Femenino',
             'address' => 'Calle Salud 123',
             'emergency_contact_name' => 'Contacto de emergencia',
-            'emergency_contact_relationship' => 'Hermana',
-            'emergency_contact_phone' => '55567890',
+            'emergency_contact_relationship' => 'Otro',
+            'emergency_contact_relationship_other' => 'Hermana',
+            'emergency_contact_phone' => '5556789012',
             'blood_type' => 'O+',
             'allergies_conditions' => 'Alergia a la penicilina',
         ])->assertRedirect(route('recepcion.patients'));
@@ -360,7 +390,7 @@ class RoleAccessTest extends TestCase
         $this->assertSame('Calle Salud 123', $patient->address);
         $this->assertSame('Contacto de emergencia', $patient->emergency_contact_name);
         $this->assertSame('Hermana', $patient->emergency_contact_relationship);
-        $this->assertSame('55567890', $patient->emergency_contact_phone);
+        $this->assertSame('5556789012', $patient->emergency_contact_phone);
         $this->assertSame('O+', $patient->blood_type);
         $this->assertSame('Alergia a la penicilina', $patient->allergies_conditions);
         $this->assertSame($patient->birth_date->age, $patient->age);
@@ -369,8 +399,19 @@ class RoleAccessTest extends TestCase
             ->assertOk()
             ->assertSee('Nuevo Paciente')
             ->assertSee('O+')
+            ->assertSee('Contacto')
+            ->assertSee('Tipo de sangre')
+            ->assertSee('Estado')
+            ->assertDontSee('Edad / nacimiento')
+            ->assertDontSee('Sexo / género')
             ->assertDontSee('Alergia a la penicilina')
             ->assertDontSee('Contacto de emergencia');
+
+        $this->actingAs($reception)->get(route('recepcion.patients.show', $patient))
+            ->assertOk()
+            ->assertSee('Calle Salud 123')
+            ->assertSee('Alergia a la penicilina')
+            ->assertSee('Hermana');
 
         $this->actingAs($reception)->post(route('recepcion.appointments.store'), [
             'patient_id' => $patient->id,
@@ -392,5 +433,114 @@ class RoleAccessTest extends TestCase
             'id' => $appointment->id,
             'status' => Appointment::STATUS_CANCELLED,
         ]);
+    }
+
+    public function test_patient_contacts_and_required_fields_are_validated(): void
+    {
+        $reception = User::factory()->create(['role' => 'recepcion']);
+        $validData = [
+            'name' => 'Paciente de Validación',
+            'email' => 'validacion@example.test',
+            'phone' => '5551234567',
+            'birth_date' => '1990-06-15',
+            'gender' => 'Femenino',
+            'emergency_contact_phone' => '5556789012',
+        ];
+
+        $this->actingAs($reception)->post(route('recepcion.patients.store'), array_merge($validData, [
+            'phone' => '555123456A',
+        ]))->assertSessionHasErrors('phone');
+
+        $this->post(route('recepcion.patients.store'), array_merge($validData, [
+            'emergency_contact_phone' => '555 6789012',
+        ]))->assertSessionHasErrors('emergency_contact_phone');
+
+        $this->post(route('recepcion.patients.store'), array_merge($validData, [
+            'email' => 'correo-invalido',
+        ]))->assertSessionHasErrors('email');
+
+        $this->post(route('recepcion.patients.store'), array_merge($validData, [
+            'emergency_contact_relationship' => 'Otro',
+        ]))->assertSessionHasErrors('emergency_contact_relationship_other');
+
+        $this->post(route('recepcion.patients.store'), [
+            'birth_date' => '1990-06-15',
+            'gender' => 'Femenino',
+        ])->assertSessionHasErrors(['name']);
+
+        $patient = Patient::create(['name' => 'Paciente para edición']);
+        $this->put(route('recepcion.patients.update', $patient), array_merge($validData, [
+            'phone' => '123456789X',
+        ]))->assertSessionHasErrors('phone');
+
+        $this->assertDatabaseCount('patients', 1);
+    }
+
+    public function test_duplicate_user_and_patient_identity_fields_are_rejected(): void
+    {
+        $admin = User::factory()->create(['role' => 'administrador']);
+        $existingUser = User::factory()->create([
+            'name' => 'Usuario Duplicado',
+            'email' => 'usuario.duplicado@example.test',
+        ]);
+        $newUserData = [
+            'name' => 'Nuevo Usuario',
+            'email' => 'nuevo.usuario@example.test',
+            'password' => 'Password1!',
+            'password_confirmation' => 'Password1!',
+            'role' => 'medico',
+            'is_active' => '1',
+        ];
+
+        $this->actingAs($admin)->post(route('admin.users.store'), array_merge($newUserData, [
+            'name' => $existingUser->name,
+        ]))->assertSessionHasErrors('name');
+
+        $this->post(route('admin.users.store'), array_merge($newUserData, [
+            'email' => $existingUser->email,
+        ]))->assertSessionHasErrors('email');
+
+        $this->put(route('admin.users.update', $existingUser), [
+            'name' => $existingUser->name,
+            'email' => $existingUser->email,
+            'role' => $existingUser->role,
+            'is_active' => '1',
+        ])->assertRedirect(route('admin.users'));
+
+        $reception = User::factory()->create(['role' => 'recepcion']);
+        $existingPatient = Patient::create([
+            'name' => 'Paciente Duplicado',
+            'email' => 'paciente.duplicado@example.test',
+            'phone' => '5552223333',
+            'birth_date' => '1990-06-15',
+            'gender' => 'Femenino',
+        ]);
+        $newPatientData = [
+            'name' => 'Paciente Nuevo',
+            'email' => 'paciente.nuevo@example.test',
+            'phone' => '5554446666',
+            'birth_date' => '1990-06-15',
+            'gender' => 'Masculino',
+        ];
+
+        $this->actingAs($reception)->post(route('recepcion.patients.store'), array_merge($newPatientData, [
+            'name' => $existingPatient->name,
+        ]))->assertSessionHasErrors('name');
+
+        $this->post(route('recepcion.patients.store'), array_merge($newPatientData, [
+            'email' => $existingPatient->email,
+        ]))->assertSessionHasErrors('email');
+
+        $this->post(route('recepcion.patients.store'), array_merge($newPatientData, [
+            'phone' => $existingPatient->phone,
+        ]))->assertSessionHasErrors('phone');
+
+        $this->put(route('recepcion.patients.update', $existingPatient), [
+            'name' => $existingPatient->name,
+            'email' => $existingPatient->email,
+            'phone' => $existingPatient->phone,
+            'birth_date' => $existingPatient->birth_date->toDateString(),
+            'gender' => $existingPatient->gender,
+        ])->assertRedirect(route('recepcion.patients'));
     }
 }

@@ -35,7 +35,7 @@
 
                 <div class="md:col-span-2">
                     <label class="mb-1 block text-sm font-medium text-slate-700">Correo electrónico</label>
-                    <input type="email" name="email" maxlength="50" value="{{ old('email') }}" class="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-[#223FAA]" required>
+                    <input type="email" name="email" maxlength="255" value="{{ old('email') }}" class="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-[#223FAA]" required>
                     @error('email')
                         <p class="mt-1 text-xs font-medium text-red-600">{{ $message }}</p>
                     @enderror
@@ -67,7 +67,8 @@
 
                 <div>
                     <label class="mb-1 block text-sm font-medium text-slate-700">Contraseña</label>
-                    <input type="password" name="password" maxlength="8" class="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-[#223FAA]" required>
+                    <input type="password" name="password" minlength="8" maxlength="12" autocomplete="new-password" class="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-[#223FAA]" required>
+                    <p class="mt-1 text-[11px] text-slate-500">Entre 8 y 12 caracteres, con mayúscula, minúscula, número y símbolo.</p>
                     @error('password')
                         <p class="mt-1 text-xs font-medium text-red-600">{{ $message }}</p>
                     @enderror
@@ -75,7 +76,7 @@
 
                 <div>
                     <label class="mb-1 block text-sm font-medium text-slate-700">Confirmar contraseña</label>
-                    <input type="password" name="password_confirmation" maxlength="8" class="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-[#223FAA]" required>
+                    <input type="password" name="password_confirmation" minlength="8" maxlength="12" autocomplete="new-password" class="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-[#223FAA]" required>
                     @error('password_confirmation')
                         <p class="mt-1 text-xs font-medium text-red-600">{{ $message }}</p>
                     @enderror

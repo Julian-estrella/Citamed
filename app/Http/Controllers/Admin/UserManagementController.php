@@ -6,6 +6,8 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Password;
 
 class UserManagementController extends Controller
 {
@@ -22,10 +24,10 @@ class UserManagementController extends Controller
     {
         $query = User::query();
         $filters = $request->validate([
-            'name' => ['nullable', 'string', 'max:255'],
-            'email' => ['nullable', 'string', 'max:255'],
             'role' => ['nullable', 'in:administrador,medico,recepcion'],
             'status' => ['nullable', 'in:active,inactive'],
+            'sort' => ['sometimes', 'in:name'],
+            'direction' => ['sometimes', 'in:asc,desc'],
         ]);
 
         if ($request->filled('search')) {
@@ -36,12 +38,6 @@ class UserManagementController extends Controller
             });
         }
 
-        foreach (['name', 'email'] as $column) {
-            if (! empty($filters[$column])) {
-                $query->where($column, 'like', '%'.$filters[$column].'%');
-            }
-        }
-
         if (! empty($filters['role'])) {
             $query->where('role', $filters['role']);
         }
@@ -50,7 +46,9 @@ class UserManagementController extends Controller
             $query->where('is_active', $filters['status'] === 'active');
         }
 
-        $users = $query->latest()->get();
+        $users = $query
+            ->orderBy($filters['sort'] ?? 'name', $filters['direction'] ?? 'asc')
+            ->get();
 
         return view('admin.users.index', [
             'users' => $users,
@@ -67,9 +65,14 @@ class UserManagementController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:50', 'unique:users,email'],
-            'password' => ['required', 'string', 'min:8', 'max:8', 'confirmed'],
+            'name' => ['required', 'string', 'max:255', Rule::unique('users', 'name')],
+            'email' => ['required', 'string', 'email', 'max:255', Rule::unique('users', 'email')],
+            'password' => [
+                'required',
+                'string',
+                Password::min(8)->max(12)->mixedCase()->numbers()->symbols(),
+                'confirmed',
+            ],
             'role' => ['required', 'in:administrador,medico,recepcion'],
             'is_active' => ['required', 'boolean'],
         ]);
@@ -81,7 +84,6 @@ class UserManagementController extends Controller
             'role' => $validated['role'],
             'is_active' => (bool) ($validated['is_active'] ?? true),
         ]);
-
         return redirect()->route('admin.users')->with('success', 'Usuario registrado correctamente.');
     }
 
@@ -100,17 +102,22 @@ class UserManagementController extends Controller
     public function update(Request $request, User $user)
     {
         $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255', 'unique:users,email,'.$user->id],
-            'password' => ['nullable', 'string', 'min:8', 'confirmed'],
+            'name' => ['required', 'string', 'max:255', Rule::unique('users', 'name')->ignore($user->id)],
+            'email' => ['required', 'string', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
+            'password' => [
+                'nullable',
+                'string',
+                Password::min(8)->max(12)->mixedCase()->numbers()->symbols(),
+                'confirmed',
+            ],
             'role' => ['required', 'in:administrador,medico,recepcion'],
-            'is_active' => ['nullable', 'boolean'],
+            'is_active' => ['required', 'boolean'],
         ]);
 
         $user->name = $validated['name'];
         $user->email = $validated['email'];
         $user->role = $validated['role'];
-        $user->is_active = (bool) ($validated['is_active'] ?? $user->is_active);
+        $user->is_active = (bool) $validated['is_active'];
 
         if (! empty($validated['password'])) {
             $user->password = Hash::make($validated['password']);

@@ -47,7 +47,6 @@
                     <button type="submit" class="rounded-2xl bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700">
                         <i class="fa-solid fa-magnifying-glass"></i>
                     </button>
-                    <a href="{{ route('admin.users') }}" class="rounded-2xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600">Limpiar</a>
                 </form>
             </div>
 
@@ -55,17 +54,26 @@
                 <table class="min-w-full divide-y divide-slate-200 text-left text-sm text-slate-700">
                     <thead class="bg-slate-50 text-slate-600">
                         <tr>
-                            <th class="px-4 py-3 font-semibold">Nombre</th>
+                            <th class="px-4 py-3 font-semibold">
+                                @php
+                                    $nextDirection = ($filters['direction'] ?? 'asc') === 'asc' ? 'desc' : 'asc';
+                                @endphp
+                                <a href="{{ route('admin.users', array_merge(request()->query(), ['sort' => 'name', 'direction' => $nextDirection])) }}" class="inline-flex items-center gap-2">
+                                    Nombre
+                                    <i class="fa-solid {{ ($filters['direction'] ?? 'asc') === 'asc' ? 'fa-arrow-up-a-z' : 'fa-arrow-down-a-z' }}" aria-hidden="true"></i>
+                                    <span class="sr-only">Ordenar {{ $nextDirection === 'asc' ? 'ascendente' : 'descendente' }}</span>
+                                </a>
+                            </th>
                             <th class="px-4 py-3 font-semibold">Correo</th>
                             <th class="px-4 py-3 font-semibold">Rol</th>
                             <th class="px-4 py-3 font-semibold">Estado</th>
                             <th class="px-4 py-3 font-semibold text-right">Acciones</th>
                         </tr>
                         <tr class="border-t border-slate-200 bg-white">
-                            <th class="px-2 py-2"><input form="user-filters" type="search" name="name" value="{{ $filters['name'] ?? '' }}" placeholder="Filtrar nombre" aria-label="Filtrar por nombre" class="w-full min-w-28 rounded-lg border-slate-200 text-xs"></th>
-                            <th class="px-2 py-2"><input form="user-filters" type="search" name="email" value="{{ $filters['email'] ?? '' }}" placeholder="Filtrar correo" aria-label="Filtrar por correo" class="w-full min-w-32 rounded-lg border-slate-200 text-xs"></th>
+                            <th></th>
+                            <th></th>
                             <th class="px-2 py-2">
-                                <select form="user-filters" name="role" aria-label="Filtrar por rol" class="w-full min-w-32 rounded-lg border-slate-200 text-xs">
+                                <select form="user-filters" name="role" aria-label="Filtrar por rol" onchange="this.form.requestSubmit()" class="w-full min-w-32 rounded-lg border-slate-200 text-xs">
                                     <option value="">Todos los roles</option>
                                     <option value="administrador" @selected(($filters['role'] ?? '') === 'administrador')>Administrador</option>
                                     <option value="medico" @selected(($filters['role'] ?? '') === 'medico')>Médico</option>
@@ -73,7 +81,7 @@
                                 </select>
                             </th>
                             <th class="px-2 py-2">
-                                <select form="user-filters" name="status" aria-label="Filtrar por estado" class="w-full min-w-28 rounded-lg border-slate-200 text-xs">
+                                <select form="user-filters" name="status" aria-label="Filtrar por estado" onchange="this.form.requestSubmit()" class="w-full min-w-28 rounded-lg border-slate-200 text-xs">
                                     <option value="">Todos</option>
                                     <option value="active" @selected(($filters['status'] ?? '') === 'active')>Activo</option>
                                     <option value="inactive" @selected(($filters['status'] ?? '') === 'inactive')>Inactivo</option>

@@ -48,7 +48,7 @@
                 </div>
                 <div>
                     <label for="phone" class="mb-1 block text-sm font-medium text-slate-700">Teléfono</label>
-                    <input id="phone" type="tel" name="phone" value="{{ old('phone', $patient->phone) }}" maxlength="30" class="w-full rounded-xl border-slate-200 text-sm">
+                    <input id="phone" type="tel" name="phone" value="{{ old('phone', $patient->phone) }}" minlength="10" maxlength="10" inputmode="numeric" pattern="[0-9]{10}" class="w-full rounded-xl border-slate-200 text-sm">
                     @error('phone')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
                 </div>
                 <div>
@@ -72,12 +72,28 @@
                 </div>
                 <div>
                     <label for="emergency_contact_relationship" class="mb-1 block text-sm font-medium text-slate-700">Parentesco</label>
-                    <input id="emergency_contact_relationship" type="text" name="emergency_contact_relationship" value="{{ old('emergency_contact_relationship', $patient->emergency_contact_relationship) }}" maxlength="100" class="w-full rounded-xl border-slate-200 text-sm">
+                    @php
+                        $existingRelationship = $patient->emergency_contact_relationship;
+                        $isOtherRelationship = filled($existingRelationship) && !in_array($existingRelationship, ['Madre', 'Padre'], true);
+                        $relationshipValue = old('emergency_contact_relationship', $isOtherRelationship ? 'Otro' : $existingRelationship);
+                        $otherRelationshipValue = old('emergency_contact_relationship_other', $isOtherRelationship ? $existingRelationship : '');
+                    @endphp
+                    <select id="emergency_contact_relationship" name="emergency_contact_relationship" class="w-full rounded-xl border-slate-200 text-sm">
+                        <option value="">Seleccione una opción</option>
+                        @foreach (['Madre', 'Padre', 'Otro'] as $relationship)
+                            <option value="{{ $relationship }}" @selected($relationshipValue === $relationship)>{{ $relationship }}</option>
+                        @endforeach
+                    </select>
                     @error('emergency_contact_relationship')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                </div>
+                <div id="emergency-contact-other-field" @if ($relationshipValue !== 'Otro') hidden @endif>
+                    <label for="emergency_contact_relationship_other" class="mb-1 block text-sm font-medium text-slate-700">Especifica el parentesco</label>
+                    <input id="emergency_contact_relationship_other" type="text" name="emergency_contact_relationship_other" value="{{ $otherRelationshipValue }}" maxlength="100" @required($relationshipValue === 'Otro') class="w-full rounded-xl border-slate-200 text-sm">
+                    @error('emergency_contact_relationship_other')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
                 </div>
                 <div>
                     <label for="emergency_contact_phone" class="mb-1 block text-sm font-medium text-slate-700">Teléfono</label>
-                    <input id="emergency_contact_phone" type="tel" name="emergency_contact_phone" value="{{ old('emergency_contact_phone', $patient->emergency_contact_phone) }}" maxlength="30" class="w-full rounded-xl border-slate-200 text-sm">
+                    <input id="emergency_contact_phone" type="tel" name="emergency_contact_phone" value="{{ old('emergency_contact_phone', $patient->emergency_contact_phone) }}" minlength="10" maxlength="10" inputmode="numeric" pattern="[0-9]{10}" class="w-full rounded-xl border-slate-200 text-sm">
                     @error('emergency_contact_phone')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
                 </div>
             </div>
@@ -110,4 +126,22 @@
             </div>
         </form>
     </div>
+    <script>
+        const relationshipSelect = document.getElementById('emergency_contact_relationship');
+        const otherRelationshipField = document.getElementById('emergency-contact-other-field');
+        const otherRelationshipInput = document.getElementById('emergency_contact_relationship_other');
+
+        function updateOtherRelationshipField() {
+            const isOther = relationshipSelect.value === 'Otro';
+            otherRelationshipField.hidden = !isOther;
+            otherRelationshipInput.required = isOther;
+
+            if (!isOther) {
+                otherRelationshipInput.value = '';
+            }
+        }
+
+        relationshipSelect.addEventListener('change', updateOtherRelationshipField);
+        updateOtherRelationshipField();
+    </script>
 @endsection

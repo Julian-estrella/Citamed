@@ -4,12 +4,6 @@
     @php
         $user = Auth::user();
         $userName = $user?->name ?? 'Usuario';
-        $roleLabel = match ($user?->role ?? '') {
-            'administrador' => 'Administrador',
-            'medico' => 'Médico',
-            'recepcion' => 'Recepción',
-            default => 'Usuario',
-        };
     @endphp
 
     <div class="flex min-h-full w-full flex-col gap-6">
@@ -19,16 +13,6 @@
                 <h2 class="mt-3 text-3xl font-bold text-[#191346]">Bienvenido, {{ $userName }}</h2>
             </div>
 
-            <div class="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
-                <div class="relative">
-                    <button type="button" class="flex h-11 w-11 items-center justify-center rounded-xl bg-[#eef3ff] text-[#223FAA] transition hover:bg-[#e0e9ff]">
-                        <i class="fa-solid fa-bell"></i>
-                    </button>
-                    <span class="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-[#223FAA] text-[10px] font-bold text-white">3</span>
-                </div>
-
-                <x-user-profile-menu :user="$user" :user-name="$userName" :role-label="$roleLabel" />
-            </div>
         </header>
 
         <section class="grid gap-4 md:grid-cols-3">

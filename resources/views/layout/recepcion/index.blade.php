@@ -4,7 +4,6 @@
     @php
         $user = Auth::user();
         $userName = $user?->name ?? 'Recepción';
-        $roleLabel = 'Recepción';
         $quickActions = [
             ['permission' => 'registrar_pacientes', 'label' => 'Registrar paciente', 'description' => 'Crear un registro de paciente', 'icon' => 'fa-solid fa-user-plus', 'route' => route('recepcion.patients')],
             ['permission' => 'consultar_pacientes', 'label' => 'Consultar pacientes', 'description' => 'Buscar información de pacientes', 'icon' => 'fa-solid fa-magnifying-glass', 'route' => route('recepcion.patients')],
@@ -25,13 +24,6 @@
                 <p class="text-xs font-semibold uppercase tracking-[0.3em] text-[#223FAA]">Panel de recepción</p>
                 <h2 class="mt-2 text-3xl font-bold text-[#191346]">Bienvenido, {{ $userName }}</h2>
                 <p class="mt-1 text-sm text-slate-500">Agenda, pacientes y citas según tus permisos.</p>
-            </div>
-            <div class="flex flex-wrap items-center gap-3">
-                <div class="flex items-center gap-2 rounded-xl bg-[#eef3ff] px-3 py-2 text-sm font-medium text-[#223FAA]">
-                    <i class="fa-solid fa-calendar-day"></i>
-                    {{ now()->translatedFormat('l, j \\d\\e F') }}
-                </div>
-                <x-user-profile-menu :user="$user" :user-name="$userName" :role-label="$roleLabel" />
             </div>
         </header>
 

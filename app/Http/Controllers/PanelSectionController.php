@@ -16,14 +16,10 @@ class PanelSectionController extends Controller
         $user = Auth::user();
         $query = Patient::query();
         $filters = $request->validate([
-            'name' => ['nullable', 'string', 'max:255'],
-            'address' => ['nullable', 'string', 'max:2000'],
-            'birth_date' => ['nullable', 'date_format:Y-m-d'],
-            'gender' => ['nullable', 'in:Femenino,Masculino,Otro,Prefiero no decirlo'],
-            'phone' => ['nullable', 'string', 'max:30'],
-            'email' => ['nullable', 'string', 'max:255'],
             'blood_type' => ['nullable', 'in:A+,A-,B+,B-,AB+,AB-,O+,O-'],
             'status' => ['nullable', 'in:active,inactive'],
+            'sort' => ['sometimes', 'in:name'],
+            'direction' => ['sometimes', 'in:asc,desc'],
         ]);
 
         if ($user->isMedico()) {
@@ -33,30 +29,8 @@ class PanelSectionController extends Controller
                     ->whereIn('status', [Appointment::STATUS_SCHEDULED, Appointment::STATUS_CONFIRMED]));
         }
 
-        if ($request->filled('search')) {
-            $search = $request->string('search')->toString();
-            $query->where(function ($patients) use ($search) {
-                $patients->where('name', 'like', "%{$search}%")
-                    ->orWhere('email', 'like', "%{$search}%")
-                    ->orWhere('phone', 'like', "%{$search}%")
-                    ->orWhere('emergency_contact_name', 'like', "%{$search}%");
-            });
-        }
-
-        foreach (['name', 'address', 'phone', 'email'] as $column) {
-            if (! empty($filters[$column])) {
-                $query->where($column, 'like', '%'.$filters[$column].'%');
-            }
-        }
-
-        if (! empty($filters['birth_date'])) {
-            $query->whereDate('birth_date', $filters['birth_date']);
-        }
-
-        foreach (['gender', 'blood_type'] as $column) {
-            if (! empty($filters[$column])) {
-                $query->where($column, $filters[$column]);
-            }
+        if (! empty($filters['blood_type'])) {
+            $query->where('blood_type', $filters['blood_type']);
         }
 
         if (! empty($filters['status'])) {
@@ -65,9 +39,8 @@ class PanelSectionController extends Controller
 
         return view('admin.pacientes.index', [
             'user' => $user,
-            'patients' => $query->orderBy('name')->get(),
+            'patients' => $query->orderBy($filters['sort'] ?? 'name', $filters['direction'] ?? 'asc')->get(),
             'title' => $user->isMedico() ? 'Mis pacientes' : 'Pacientes',
-            'search' => $request->input('search'),
             'filters' => $filters,
         ]);
     }
@@ -81,21 +54,9 @@ class PanelSectionController extends Controller
 
     public function storePatient(Request $request)
     {
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['nullable', 'email', 'max:255'],
-            'phone' => ['nullable', 'string', 'max:30'],
-            'birth_date' => ['required', 'date', 'before_or_equal:today'],
-            'gender' => ['required', 'string', 'in:Femenino,Masculino,Otro,Prefiero no decirlo'],
-            'address' => ['nullable', 'string', 'max:2000'],
-            'emergency_contact_name' => ['nullable', 'string', 'max:255'],
-            'emergency_contact_relationship' => ['nullable', 'string', 'max:100'],
-            'emergency_contact_phone' => ['nullable', 'string', 'max:30'],
-            'blood_type' => ['nullable', 'string', 'in:A+,A-,B+,B-,AB+,AB-,O+,O-'],
-            'allergies_conditions' => ['nullable', 'string', 'max:5000'],
-        ]);
+        $validated = $request->validate($this->patientValidationRules());
 
-        Patient::create($validated);
+        Patient::create($this->normalizePatientData($validated));
 
         return redirect()->route($this->patientsRoute())->with('success', 'Paciente registrado correctamente.');
     }
@@ -110,21 +71,9 @@ class PanelSectionController extends Controller
 
     public function updatePatient(Request $request, Patient $patient)
     {
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['nullable', 'email', 'max:255'],
-            'phone' => ['nullable', 'string', 'max:30'],
-            'birth_date' => ['required', 'date', 'before_or_equal:today'],
-            'gender' => ['required', 'string', 'in:Femenino,Masculino,Otro,Prefiero no decirlo'],
-            'address' => ['nullable', 'string', 'max:2000'],
-            'emergency_contact_name' => ['nullable', 'string', 'max:255'],
-            'emergency_contact_relationship' => ['nullable', 'string', 'max:100'],
-            'emergency_contact_phone' => ['nullable', 'string', 'max:30'],
-            'blood_type' => ['nullable', 'string', 'in:A+,A-,B+,B-,AB+,AB-,O+,O-'],
-            'allergies_conditions' => ['nullable', 'string', 'max:5000'],
-        ]);
+        $validated = $request->validate($this->patientValidationRules($patient));
 
-        $patient->update($validated);
+        $patient->update($this->normalizePatientData($validated));
 
         return redirect()->route($this->patientsRoute())->with('success', 'Paciente actualizado correctamente.');
     }
@@ -335,5 +284,44 @@ class PanelSectionController extends Controller
             User::ROLE_MEDICO => 'medico.appointments',
             default => 'recepcion.appointments',
         };
+    }
+
+    private function patientValidationRules(?Patient $patient = null): array
+    {
+        $uniqueName = Rule::unique('patients', 'name');
+        $uniqueEmail = Rule::unique('patients', 'email');
+        $uniquePhone = Rule::unique('patients', 'phone');
+
+        if ($patient) {
+            $uniqueName->ignore($patient->id);
+            $uniqueEmail->ignore($patient->id);
+            $uniquePhone->ignore($patient->id);
+        }
+
+        return [
+            'name' => ['required', 'string', 'max:255', $uniqueName],
+            'email' => ['nullable', 'email', 'max:255', $uniqueEmail],
+            'phone' => ['nullable', 'regex:/\A[0-9]{10}\z/', $uniquePhone],
+            'birth_date' => ['required', 'date', 'before_or_equal:today'],
+            'gender' => ['required', 'string', 'in:Femenino,Masculino,Otro,Prefiero no decirlo'],
+            'address' => ['nullable', 'string', 'max:2000'],
+            'emergency_contact_name' => ['nullable', 'string', 'max:255'],
+            'emergency_contact_relationship' => ['nullable', Rule::in(['Madre', 'Padre', 'Otro'])],
+            'emergency_contact_relationship_other' => ['nullable', 'required_if:emergency_contact_relationship,Otro', 'string', 'max:100'],
+            'emergency_contact_phone' => ['nullable', 'regex:/\A[0-9]{10}\z/'],
+            'blood_type' => ['nullable', 'string', 'in:A+,A-,B+,B-,AB+,AB-,O+,O-'],
+            'allergies_conditions' => ['nullable', 'string', 'max:5000'],
+        ];
+    }
+
+    private function normalizePatientData(array $validated): array
+    {
+        if (($validated['emergency_contact_relationship'] ?? null) === 'Otro') {
+            $validated['emergency_contact_relationship'] = $validated['emergency_contact_relationship_other'];
+        }
+
+        unset($validated['emergency_contact_relationship_other']);
+
+        return $validated;
     }
 }

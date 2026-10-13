@@ -1,5 +1,4 @@
-<td class="px-4 py-3">
-    <div class="flex items-center justify-end gap-2">
+<div class="flex items-center justify-end gap-2">
         @php
             $showRoute = $user->isAdmin() ? 'admin.patients.show' : ($user->isMedico() ? 'medico.patients.show' : 'recepcion.patients.show');
             $editRoute = $user->isAdmin() ? 'admin.patients.edit' : 'recepcion.patients.edit';
@@ -34,5 +33,4 @@
                 </button>
             </form>
         @endif
-    </div>
-</td>
+</div>

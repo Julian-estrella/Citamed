@@ -16,13 +16,14 @@
 
         <div class="col-span-6 sm:col-span-4">
             <x-label for="password" value="{{ __('New Password') }}" />
-            <x-input id="password" type="password" class="mt-1 block w-full" wire:model="state.password" autocomplete="new-password" />
+            <x-input id="password" type="password" minlength="8" maxlength="12" class="mt-1 block w-full" wire:model="state.password" autocomplete="new-password" />
+            <p class="mt-1 text-sm text-gray-600">Entre 8 y 12 caracteres, con mayúscula, minúscula, número y símbolo.</p>
             <x-input-error for="password" class="mt-2" />
         </div>
 
         <div class="col-span-6 sm:col-span-4">
             <x-label for="password_confirmation" value="{{ __('Confirm Password') }}" />
-            <x-input id="password_confirmation" type="password" class="mt-1 block w-full" wire:model="state.password_confirmation" autocomplete="new-password" />
+            <x-input id="password_confirmation" type="password" minlength="8" maxlength="12" class="mt-1 block w-full" wire:model="state.password_confirmation" autocomplete="new-password" />
             <x-input-error for="password_confirmation" class="mt-2" />
         </div>
     </x-slot>

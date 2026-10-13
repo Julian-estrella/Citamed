@@ -49,12 +49,12 @@
                 </div>
                 <div>
                     <label for="phone" class="mb-1 block text-sm font-medium text-slate-700">Teléfono de contacto</label>
-                    <input id="phone" type="tel" name="phone" value="{{ old('phone') }}" maxlength="30" autocomplete="tel" class="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-[#223FAA]">
+                    <input id="phone" type="tel" name="phone" value="{{ old('phone') }}" minlength="10" maxlength="10" inputmode="numeric" pattern="[0-9]{10}" autocomplete="tel" class="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-[#223FAA]">
                     @error('phone')<p class="mt-1 text-xs font-medium text-red-600">{{ $message }}</p>@enderror
                 </div>
                 <div>
                     <label for="email" class="mb-1 block text-sm font-medium text-slate-700">Correo electrónico</label>
-                    <input id="email" type="email" name="email" value="{{ old('email') }}" autocomplete="email" class="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-[#223FAA]">
+                    <input id="email" type="email" name="email" value="{{ old('email') }}" maxlength="255" autocomplete="email" class="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-[#223FAA]">
                     @error('email')<p class="mt-1 text-xs font-medium text-red-600">{{ $message }}</p>@enderror
                 </div>
                 <div class="md:col-span-2">
@@ -73,12 +73,22 @@
                 </div>
                 <div>
                     <label for="emergency_contact_relationship" class="mb-1 block text-sm font-medium text-slate-700">Parentesco</label>
-                    <input id="emergency_contact_relationship" type="text" name="emergency_contact_relationship" value="{{ old('emergency_contact_relationship') }}" maxlength="100" class="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-[#223FAA]">
+                    <select id="emergency_contact_relationship" name="emergency_contact_relationship" class="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-[#223FAA]">
+                        <option value="">Seleccione una opción</option>
+                        @foreach (['Madre', 'Padre', 'Otro'] as $relationship)
+                            <option value="{{ $relationship }}" @selected(old('emergency_contact_relationship') === $relationship)>{{ $relationship }}</option>
+                        @endforeach
+                    </select>
                     @error('emergency_contact_relationship')<p class="mt-1 text-xs font-medium text-red-600">{{ $message }}</p>@enderror
+                </div>
+                <div id="emergency-contact-other-field" @if (old('emergency_contact_relationship') !== 'Otro') hidden @endif>
+                    <label for="emergency_contact_relationship_other" class="mb-1 block text-sm font-medium text-slate-700">Especifica el parentesco</label>
+                    <input id="emergency_contact_relationship_other" type="text" name="emergency_contact_relationship_other" value="{{ old('emergency_contact_relationship_other') }}" maxlength="100" @required(old('emergency_contact_relationship') === 'Otro') class="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-[#223FAA]">
+                    @error('emergency_contact_relationship_other')<p class="mt-1 text-xs font-medium text-red-600">{{ $message }}</p>@enderror
                 </div>
                 <div>
                     <label for="emergency_contact_phone" class="mb-1 block text-sm font-medium text-slate-700">Teléfono</label>
-                    <input id="emergency_contact_phone" type="tel" name="emergency_contact_phone" value="{{ old('emergency_contact_phone') }}" maxlength="30" class="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-[#223FAA]">
+                    <input id="emergency_contact_phone" type="tel" name="emergency_contact_phone" value="{{ old('emergency_contact_phone') }}" minlength="10" maxlength="10" inputmode="numeric" pattern="[0-9]{10}" class="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-[#223FAA]">
                     @error('emergency_contact_phone')<p class="mt-1 text-xs font-medium text-red-600">{{ $message }}</p>@enderror
                 </div>
             </div>
@@ -135,5 +145,22 @@
 
         birthDateInput.addEventListener('input', updatePatientAge);
         updatePatientAge();
+
+        const relationshipSelect = document.getElementById('emergency_contact_relationship');
+        const otherRelationshipField = document.getElementById('emergency-contact-other-field');
+        const otherRelationshipInput = document.getElementById('emergency_contact_relationship_other');
+
+        function updateOtherRelationshipField() {
+            const isOther = relationshipSelect.value === 'Otro';
+            otherRelationshipField.hidden = !isOther;
+            otherRelationshipInput.required = isOther;
+
+            if (!isOther) {
+                otherRelationshipInput.value = '';
+            }
+        }
+
+        relationshipSelect.addEventListener('change', updateOtherRelationshipField);
+        updateOtherRelationshipField();
     </script>
 @endsection

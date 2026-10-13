@@ -4,7 +4,6 @@
     @php
         $user = Auth::user();
         $userName = $user?->name ?? 'Administrador';
-        $roleLabel = 'Administrador';
         $quickActions = [
             ['permission' => 'gestionar_pacientes', 'label' => 'Consultar pacientes', 'route' => route('admin.patients'), 'icon' => 'fa-solid fa-user-injured'],
             ['permission' => 'gestionar_citas', 'label' => 'Agendar cita', 'route' => route('admin.appointments'), 'icon' => 'fa-solid fa-calendar-plus'],
@@ -21,7 +20,6 @@
                 <p class="text-xs font-semibold uppercase tracking-[0.3em] text-[#223FAA]">Panel administrativo</p>
                 <h2 class="mt-2 text-3xl font-bold text-[#191346]">Bienvenido, {{ $userName }}</h2>
             </div>
-            <x-user-profile-menu :user="$user" :user-name="$userName" :role-label="$roleLabel" />
         </header>
 
         <section class="grid gap-4 md:grid-cols-3">
