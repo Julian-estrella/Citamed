@@ -35,14 +35,24 @@
         @endif
 
         <section class="rounded-3xl border border-slate-200 bg-white">
-            <div class="flex flex-col gap-4 border-b border-slate-200 p-5 md:flex-row md:items-start md:justify-between">
+            <div class="flex flex-col gap-4 border-b border-slate-200 p-5 md:flex-row md:items-center md:justify-between">
                 <div>
                     <h3 class="text-xl font-bold text-[#191346]">Pacientes registrados</h3>
                     <p class="text-sm text-slate-500">Consulta la información de contacto y médica</p>
                 </div>
+                <form id="patient-filters" method="GET" action="{{ route($listRoute) }}" class="flex w-full items-center gap-2 md:w-auto">
+                    <input type="search" name="search" value="{{ $search ?? '' }}" placeholder="Buscar paciente por nombre..." aria-label="Buscar paciente por nombre" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm focus:border-[#223FAA] md:w-64">
+                    @foreach (['blood_type', 'status', 'sort', 'direction'] as $queryKey)
+                        @if (request()->filled($queryKey))
+                            <input type="hidden" name="{{ $queryKey }}" value="{{ request()->query($queryKey) }}">
+                        @endif
+                    @endforeach
+                    <button type="submit" aria-label="Buscar" class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200">
+                        <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+                    </button>
+                </form>
             </div>
 
-            <form id="patient-filters" method="GET" action="{{ route($listRoute) }}"></form>
             <div class="overflow-x-auto rounded-b-3xl">
                 <table class="w-full min-w-[760px] divide-y divide-slate-200 text-left text-sm text-slate-700">
                     <thead class="bg-slate-50 text-slate-600">
@@ -58,29 +68,43 @@
                                 </a>
                             </th>
                             <th class="px-4 py-3 font-semibold">Contacto</th>
-                            <th class="px-4 py-3 font-semibold">Tipo de sangre</th>
-                            <th class="px-4 py-3 font-semibold">Estado</th>
+                            <th class="px-4 py-3 font-semibold">
+                                <div class="flex items-center justify-between gap-2">
+                                    <span>Tipo de sangre</span>
+                                    <details class="relative">
+                                        <summary aria-label="Filtrar por tipo de sangre" class="flex h-7 w-7 cursor-pointer list-none items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-[#223FAA] [&::-webkit-details-marker]:hidden">
+                                            <i class="fa-solid fa-chevron-down text-xs" aria-hidden="true"></i>
+                                        </summary>
+                                        <div class="absolute right-0 z-20 mt-1 min-w-32 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                                            @foreach (['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] as $bloodType)
+                                                @php($bloodTypeSelected = ($filters['blood_type'] ?? '') === $bloodType)
+                                                <a href="{{ route($listRoute, array_merge(request()->query(), ['blood_type' => $bloodTypeSelected ? '' : $bloodType])) }}" class="block px-3 py-2 text-xs {{ $bloodTypeSelected ? 'bg-slate-50 font-semibold text-[#223FAA]' : 'text-slate-700 hover:bg-slate-50' }}">
+                                                    {{ $bloodType }}{{ $bloodTypeSelected ? ' ✓' : '' }}
+                                                </a>
+                                            @endforeach
+                                        </div>
+                                    </details>
+                                </div>
+                            </th>
+                            <th class="px-4 py-3 font-semibold">
+                                <div class="flex items-center justify-between gap-2">
+                                    <span>Estado</span>
+                                    <details class="relative">
+                                        <summary aria-label="Filtrar por estado" class="flex h-7 w-7 cursor-pointer list-none items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-[#223FAA] [&::-webkit-details-marker]:hidden">
+                                            <i class="fa-solid fa-chevron-down text-xs" aria-hidden="true"></i>
+                                        </summary>
+                                        <div class="absolute right-0 z-20 mt-1 min-w-32 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                                            @foreach (['active' => 'Activo', 'inactive' => 'Inactivo'] as $statusValue => $statusLabel)
+                                                @php($statusSelected = ($filters['status'] ?? '') === $statusValue)
+                                                <a href="{{ route($listRoute, array_merge(request()->query(), ['status' => $statusSelected ? '' : $statusValue])) }}" class="block px-3 py-2 text-xs {{ $statusSelected ? 'bg-slate-50 font-semibold text-[#223FAA]' : 'text-slate-700 hover:bg-slate-50' }}">
+                                                    {{ $statusLabel }}{{ $statusSelected ? ' ✓' : '' }}
+                                                </a>
+                                            @endforeach
+                                        </div>
+                                    </details>
+                                </div>
+                            </th>
                             <th class="px-4 py-3 text-right font-semibold">Acciones</th>
-                        </tr>
-                        <tr class="border-t border-slate-200 bg-white">
-                            <th></th>
-                            <th></th>
-                            <th class="px-2 py-2">
-                                <select form="patient-filters" name="blood_type" aria-label="Filtrar por tipo de sangre" onchange="this.form.requestSubmit()" class="w-full min-w-32 rounded-lg border-slate-200 text-xs">
-                                    <option value="">Todos</option>
-                                    @foreach (['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'] as $bloodType)
-                                        <option value="{{ $bloodType }}" @selected(($filters['blood_type'] ?? '') === $bloodType)>{{ $bloodType }}</option>
-                                    @endforeach
-                                </select>
-                            </th>
-                            <th class="px-2 py-2">
-                                <select form="patient-filters" name="status" aria-label="Filtrar por estado" onchange="this.form.requestSubmit()" class="w-full min-w-24 rounded-lg border-slate-200 text-xs">
-                                    <option value="">Todos</option>
-                                    <option value="active" @selected(($filters['status'] ?? '') === 'active')>Activo</option>
-                                    <option value="inactive" @selected(($filters['status'] ?? '') === 'inactive')>Inactivo</option>
-                                </select>
-                            </th>
-                            <th></th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-200">

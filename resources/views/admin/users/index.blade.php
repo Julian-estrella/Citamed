@@ -65,29 +65,43 @@
                                 </a>
                             </th>
                             <th class="px-4 py-3 font-semibold">Correo</th>
-                            <th class="px-4 py-3 font-semibold">Rol</th>
-                            <th class="px-4 py-3 font-semibold">Estado</th>
+                            <th class="px-4 py-3 font-semibold">
+                                <div class="flex items-center justify-between gap-2">
+                                    <span>Rol</span>
+                                    <details class="relative">
+                                        <summary aria-label="Filtrar por rol" class="flex h-7 w-7 cursor-pointer list-none items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-[#223FAA] [&::-webkit-details-marker]:hidden">
+                                            <i class="fa-solid fa-chevron-down text-xs" aria-hidden="true"></i>
+                                        </summary>
+                                        <div class="absolute right-0 z-20 mt-1 min-w-40 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                                            @foreach (['' => 'Todos los roles', 'administrador' => 'Administrador', 'medico' => 'Médico', 'recepcion' => 'Recepción'] as $roleValue => $roleLabel)
+                                                @php($roleSelected = ($filters['role'] ?? '') === $roleValue && $roleValue !== '')
+                                                <a href="{{ route('admin.users', array_merge(request()->query(), ['role' => $roleSelected ? '' : $roleValue])) }}" class="block px-3 py-2 text-xs {{ $roleSelected ? 'bg-slate-50 font-semibold text-[#223FAA]' : 'text-slate-700 hover:bg-slate-50' }}">
+                                                    {{ $roleLabel }}{{ $roleSelected ? ' ✓' : '' }}
+                                                </a>
+                                            @endforeach
+                                        </div>
+                                    </details>
+                                </div>
+                            </th>
+                            <th class="px-4 py-3 font-semibold">
+                                <div class="flex items-center justify-between gap-2">
+                                    <span>Estado</span>
+                                    <details class="relative">
+                                        <summary aria-label="Filtrar por estado" class="flex h-7 w-7 cursor-pointer list-none items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-[#223FAA] [&::-webkit-details-marker]:hidden">
+                                            <i class="fa-solid fa-chevron-down text-xs" aria-hidden="true"></i>
+                                        </summary>
+                                        <div class="absolute right-0 z-20 mt-1 min-w-32 rounded-lg border border-slate-200 bg-white py-1 shadow-lg">
+                                            @foreach (['active' => 'Activo', 'inactive' => 'Inactivo'] as $statusValue => $statusLabel)
+                                                @php($statusSelected = ($filters['status'] ?? '') === $statusValue)
+                                                <a href="{{ route('admin.users', array_merge(request()->query(), ['status' => $statusSelected ? '' : $statusValue])) }}" class="block px-3 py-2 text-xs {{ $statusSelected ? 'bg-slate-50 font-semibold text-[#223FAA]' : 'text-slate-700 hover:bg-slate-50' }}">
+                                                    {{ $statusLabel }}{{ $statusSelected ? ' ✓' : '' }}
+                                                </a>
+                                            @endforeach
+                                        </div>
+                                    </details>
+                                </div>
+                            </th>
                             <th class="px-4 py-3 font-semibold text-right">Acciones</th>
-                        </tr>
-                        <tr class="border-t border-slate-200 bg-white">
-                            <th></th>
-                            <th></th>
-                            <th class="px-2 py-2">
-                                <select form="user-filters" name="role" aria-label="Filtrar por rol" onchange="this.form.requestSubmit()" class="w-full min-w-32 rounded-lg border-slate-200 text-xs">
-                                    <option value="">Todos los roles</option>
-                                    <option value="administrador" @selected(($filters['role'] ?? '') === 'administrador')>Administrador</option>
-                                    <option value="medico" @selected(($filters['role'] ?? '') === 'medico')>Médico</option>
-                                    <option value="recepcion" @selected(($filters['role'] ?? '') === 'recepcion')>Recepción</option>
-                                </select>
-                            </th>
-                            <th class="px-2 py-2">
-                                <select form="user-filters" name="status" aria-label="Filtrar por estado" onchange="this.form.requestSubmit()" class="w-full min-w-28 rounded-lg border-slate-200 text-xs">
-                                    <option value="">Todos</option>
-                                    <option value="active" @selected(($filters['status'] ?? '') === 'active')>Activo</option>
-                                    <option value="inactive" @selected(($filters['status'] ?? '') === 'inactive')>Inactivo</option>
-                                </select>
-                            </th>
-                            <th></th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-200">
@@ -126,7 +140,7 @@
                                             </button>
                                         </form>
 
-                                        @if (auth()->id() !== $userItem->id)
+                                        @if (!$userItem->isSuperAdmin() && auth()->id() !== $userItem->id)
                                             <form action="{{ route('admin.users.destroy', $userItem) }}" method="POST" onsubmit="return confirm('¿Deseas eliminar este usuario?');">
                                                 @csrf
                                                 @method('DELETE')

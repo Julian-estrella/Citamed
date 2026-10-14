@@ -28,6 +28,8 @@ class DatabaseSeeder extends Seeder
             ->where('role', 'administrador')
             ->update(['role' => 'recepcion']);
 
+        $this->call(SuperAdminSeeder::class);
+
         User::updateOrCreate(
             ['email' => 'medico@medico.com'],
             [

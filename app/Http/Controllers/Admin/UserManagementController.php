@@ -138,6 +138,10 @@ class UserManagementController extends Controller
 
     public function destroy(User $user)
     {
+        if ($user->isSuperAdmin()) {
+            return redirect()->route('admin.users')->with('error', 'No puedes eliminar al super administrador.');
+        }
+
         if (auth()->id() === $user->id) {
             return redirect()->route('admin.users')->with('error', 'No puedes eliminar tu propia cuenta.');
         }

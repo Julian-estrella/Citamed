@@ -16,6 +16,7 @@ class PanelSectionController extends Controller
         $user = Auth::user();
         $query = Patient::query();
         $filters = $request->validate([
+            'search' => ['nullable', 'string', 'max:255'],
             'blood_type' => ['nullable', 'in:A+,A-,B+,B-,AB+,AB-,O+,O-'],
             'status' => ['nullable', 'in:active,inactive'],
             'sort' => ['sometimes', 'in:name'],
@@ -27,6 +28,10 @@ class PanelSectionController extends Controller
                 ->whereHas('appointments', fn ($appointments) => $appointments
                     ->where('doctor_id', $user->id)
                     ->whereIn('status', [Appointment::STATUS_SCHEDULED, Appointment::STATUS_CONFIRMED]));
+        }
+
+        if (! empty($filters['search'])) {
+            $query->where('name', 'like', '%'.$filters['search'].'%');
         }
 
         if (! empty($filters['blood_type'])) {
@@ -42,6 +47,7 @@ class PanelSectionController extends Controller
             'patients' => $query->orderBy($filters['sort'] ?? 'name', $filters['direction'] ?? 'asc')->get(),
             'title' => $user->isMedico() ? 'Mis pacientes' : 'Pacientes',
             'filters' => $filters,
+            'search' => $filters['search'] ?? '',
         ]);
     }
 

@@ -186,7 +186,7 @@
                                                 </button>
                                             </form>
 
-                                            @if (auth()->id() !== $userItem->id)
+                                            @if (!$userItem->isSuperAdmin() && auth()->id() !== $userItem->id)
                                                 <form action="{{ route('admin.users.destroy', $userItem) }}" method="POST" onsubmit="return confirm('¿Deseas eliminar este usuario?');">
                                                     @csrf
                                                     @method('DELETE')

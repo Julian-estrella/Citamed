@@ -205,7 +205,10 @@ class RoleAccessTest extends TestCase
             ->assertSee('bg-[#F1EDF7]')
             ->assertDontSee('Filtrar nombre')
             ->assertDontSee('Filtrar correo')
-            ->assertSee('onchange="this.form.requestSubmit()"', false)
+            ->assertSee('Filtrar por rol')
+            ->assertSee('Filtrar por estado')
+            ->assertSee('fa-chevron-down')
+            ->assertDontSee('<select', false)
             ->assertDontSee('Limpiar filtros');
 
         $this->get(route('admin.doctors', ['name' => 'Medico Encontrado']))
@@ -232,15 +235,17 @@ class RoleAccessTest extends TestCase
         $patientListResponse = $this->get(route('admin.patients', [
             'blood_type' => 'O+',
             'status' => 'active',
+            'search' => 'Encontrado',
         ]))
             ->assertOk()
             ->assertSee('Paciente Encontrado')
             ->assertDontSee('Paciente Excluido')
-            ->assertDontSee('Buscar pacientes')
-            ->assertDontSee('Más filtros del paciente')
+            ->assertSee('Buscar paciente por nombre...')
+            ->assertSee('name="search"', false)
             ->assertSee('Filtrar por tipo de sangre')
             ->assertSee('Filtrar por estado')
-            ->assertSee('onchange="this.form.requestSubmit()"', false)
+            ->assertSee('fa-chevron-down')
+            ->assertDontSee('<select', false)
             ->assertDontSee('Aplicar filtros')
             ->assertDontSee('Limpiar filtros')
             ->assertSee('Acciones');
