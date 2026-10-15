@@ -1,11 +1,6 @@
 @extends('layout.app')
 
 @section('content')
-    @php
-        $isAvailability = $title === 'Mi disponibilidad';
-        $listRoute = $user->isMedico() ? ($isAvailability ? 'medico.availability' : 'medico.agenda') : ($user->isAdmin() ? 'admin.agenda' : 'recepcion.agenda');
-    @endphp
-
     <header class="mb-8 border-b border-slate-200 pb-5">
         <p class="text-xs font-semibold uppercase tracking-[0.2em] text-[#223FAA]">Planificación</p>
         <h2 class="mt-2 text-3xl font-bold text-[#191346]">{{ $title }}</h2>
@@ -16,62 +11,92 @@
         <p class="mb-5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{{ session('success') }}</p>
     @endif
 
-    @if (!$isAvailability)
-        <div class="mb-3 flex justify-end">
-            <form id="agenda-filters" method="GET" action="{{ route($listRoute) }}" class="flex items-center gap-2">
-                <button type="submit" class="rounded-xl bg-[#223FAA] px-3 py-2 text-sm font-semibold text-white"><i class="fa-solid fa-filter"></i> Filtrar</button>
-                <a href="{{ route($listRoute) }}" class="rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600">Limpiar</a>
-            </form>
+    <section class="mb-8 overflow-hidden rounded-2xl border border-slate-200 bg-white">
+        <div class="flex flex-col gap-4 border-b border-slate-200 p-4 sm:p-5 xl:flex-row xl:items-center xl:justify-between">
+            <div>
+                <h3 class="text-lg font-bold text-[#191346]">Disponibilidad médica</h3>
+                <p class="mt-1 text-sm capitalize text-slate-500">{{ $calendarTitle }}</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+                <div class="inline-flex rounded-xl bg-slate-100 p-1" aria-label="Vista del calendario">
+                    @foreach (['week' => 'Semana', 'month' => 'Mes', 'year' => 'Año'] as $viewKey => $viewLabel)
+                        <a href="{{ route($agendaRoute, ['view' => $viewKey, 'anchor' => $calendarAnchor->format('Y-m-d')]) }}" class="rounded-lg px-3 py-2 text-xs font-semibold {{ $calendarView === $viewKey ? 'bg-white text-[#223FAA] shadow-sm' : 'text-slate-600 hover:text-[#191346]' }}" @if ($calendarView === $viewKey) aria-current="page" @endif>{{ $viewLabel }}</a>
+                    @endforeach
+                </div>
+                <form method="GET" action="{{ route($agendaRoute) }}" class="flex items-center gap-2">
+                    <input type="hidden" name="view" value="month">
+                    <label for="agenda-month" class="sr-only">Seleccionar mes</label>
+                    <input id="agenda-month" type="month" name="month" value="{{ $calendarAnchor->format('Y-m') }}" class="rounded-lg border-slate-200 text-sm focus:border-[#223FAA] focus:ring-[#223FAA]">
+                    <button type="submit" aria-label="Ir al mes seleccionado" class="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-[#223FAA] text-white hover:bg-[#191346]"><i class="fa-solid fa-arrow-right" aria-hidden="true"></i></button>
+                </form>
+                <div class="flex gap-1">
+                    <a href="{{ route($agendaRoute, ['view' => $calendarView, 'anchor' => $calendarPrevious]) }}" aria-label="Periodo anterior" class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50"><i class="fa-solid fa-chevron-left" aria-hidden="true"></i></a>
+                    <a href="{{ route($agendaRoute, ['view' => $calendarView, 'anchor' => $calendarNext]) }}" aria-label="Periodo siguiente" class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50"><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></a>
+                </div>
+            </div>
         </div>
-    @endif
 
-    @if (!$isAvailability || $appointments->isNotEmpty())
-        <div class="overflow-x-auto rounded-2xl border border-slate-200">
-            <table class="w-full text-left text-sm">
-                <thead class="bg-slate-50 text-slate-600">
-                    <tr>
-                        <th class="px-4 py-3 font-semibold">Hora</th>
-                        <th class="px-4 py-3 font-semibold">Paciente</th>
-                        <th class="px-4 py-3 font-semibold">Médico</th>
-                        <th class="px-4 py-3 font-semibold">Motivo</th>
-                        <th class="px-4 py-3 font-semibold">Estado</th>
-                    </tr>
-                    @if (!$isAvailability)
-                        <tr class="border-t border-slate-200 bg-white">
-                            <th class="px-2 py-2"><input form="agenda-filters" type="time" name="scheduled_time" value="{{ $filters['scheduled_time'] ?? '' }}" aria-label="Filtrar por hora" class="w-full min-w-28 rounded-lg border-slate-200 text-xs"></th>
-                            <th class="px-2 py-2"><input form="agenda-filters" type="search" name="patient" value="{{ $filters['patient'] ?? '' }}" placeholder="Filtrar paciente" aria-label="Filtrar por paciente" class="w-full min-w-32 rounded-lg border-slate-200 text-xs"></th>
-                            <th class="px-2 py-2"><input form="agenda-filters" type="search" name="doctor" value="{{ $filters['doctor'] ?? '' }}" placeholder="Filtrar médico" aria-label="Filtrar por médico" class="w-full min-w-32 rounded-lg border-slate-200 text-xs"></th>
-                            <th class="px-2 py-2"><input form="agenda-filters" type="search" name="reason" value="{{ $filters['reason'] ?? '' }}" placeholder="Filtrar motivo" aria-label="Filtrar por motivo" class="w-full min-w-32 rounded-lg border-slate-200 text-xs"></th>
-                            <th class="px-2 py-2">
-                                <select form="agenda-filters" name="status" aria-label="Filtrar por estado" class="w-full min-w-28 rounded-lg border-slate-200 text-xs">
-                                    <option value="">Todos</option>
-                                    <option value="{{ \App\Models\Appointment::STATUS_SCHEDULED }}" @selected(($filters['status'] ?? '') === \App\Models\Appointment::STATUS_SCHEDULED)>Programada</option>
-                                    <option value="{{ \App\Models\Appointment::STATUS_CONFIRMED }}" @selected(($filters['status'] ?? '') === \App\Models\Appointment::STATUS_CONFIRMED)>Confirmada</option>
-                                </select>
-                            </th>
-                        </tr>
-                    @endif
-                </thead>
-                <tbody class="divide-y divide-slate-100">
-                    @forelse ($appointments as $appointment)
-                        <tr>
-                            <td class="whitespace-nowrap px-4 py-3 font-semibold">{{ $appointment->scheduled_at->format('H:i') }}</td>
-                            <td class="px-4 py-3">{{ $appointment->patient->name }}</td>
-                            <td class="px-4 py-3">{{ $appointment->doctor?->name ?? 'Médico no disponible' }}</td>
-                            <td class="px-4 py-3">{{ $appointment->reason ?: 'Consulta' }}</td>
-                            <td class="px-4 py-3">{{ ucfirst($appointment->status) }}</td>
-                        </tr>
-                    @empty
-                        <tr><td colspan="5" class="px-4 py-8 text-center text-slate-500">No se encontraron citas para esos filtros.</td></tr>
-                    @endforelse
-                </tbody>
-            </table>
+        <div class="flex flex-wrap gap-x-5 gap-y-2 border-b border-slate-100 px-4 py-3 text-xs text-slate-600 sm:px-5">
+            <span class="inline-flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-emerald-500"></span>Alta disponibilidad</span>
+            <span class="inline-flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-amber-400"></span>Disponibilidad limitada</span>
+            <span class="inline-flex items-center gap-2"><span class="h-2.5 w-2.5 rounded-full bg-red-500"></span>Sin horarios libres</span>
         </div>
-    @else
-        <div class="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-6 py-12 text-center">
-            <i class="fa-solid fa-calendar-days text-2xl text-slate-400"></i>
-            <h3 class="mt-3 font-semibold text-slate-800">Agenda sin registros</h3>
-            <p class="mt-1 text-sm text-slate-500">Las citas activas de hoy aparecerán aquí.</p>
-        </div>
-    @endif
+
+        @php
+            $availabilityClasses = [
+                'green' => 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100',
+                'yellow' => 'border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100',
+                'red' => 'border-red-200 bg-red-50 text-red-800 hover:bg-red-100',
+            ];
+            $weekLabels = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+        @endphp
+
+        @if ($calendarView === 'year')
+            <div class="grid gap-4 p-4 sm:grid-cols-2 xl:grid-cols-3 sm:p-5">
+                @foreach ($calendarMonths as $calendarMonth)
+                    <article class="rounded-xl border border-slate-200 p-3">
+                        <a href="{{ route($agendaRoute, ['view' => 'month', 'anchor' => $calendarMonth['month'].'-01']) }}" class="mb-3 block text-sm font-bold capitalize text-[#191346] hover:text-[#223FAA]">{{ $calendarMonth['label'] }}</a>
+                        <div class="mb-1 grid grid-cols-7 text-center text-[10px] font-semibold text-slate-400">
+                            @foreach ($weekLabels as $weekday)
+                                <span>{{ $weekday[0] }}</span>
+                            @endforeach
+                        </div>
+                        <div class="grid grid-cols-7 gap-1">
+                            @foreach ($calendarMonth['days'] as $day)
+                                @if ($day['inPeriod'] && $day['stats'])
+                                    <a href="{{ route($agendaDayRoute, $day['date']->format('Y-m-d')) }}" aria-label="{{ $day['date']->format('d/m/Y') }}: {{ $day['stats']['availableDoctors'] }} médicos disponibles, {{ $day['stats']['freeSlots'] }} horarios libres" class="flex aspect-square items-center justify-center rounded-md text-[10px] font-semibold {{ $availabilityClasses[$day['stats']['status']] }}">{{ $day['date']->day }}</a>
+                                @else
+                                    <span class="flex aspect-square items-center justify-center text-[10px] text-slate-300">{{ $day['date']->day }}</span>
+                                @endif
+                            @endforeach
+                        </div>
+                    </article>
+                @endforeach
+            </div>
+        @else
+            <div class="overflow-x-auto p-4 sm:p-5">
+                <div class="min-w-[700px]">
+                    <div class="mb-2 grid grid-cols-7 text-center text-xs font-semibold text-slate-500">
+                        @foreach ($weekDayLabels as $weekday)
+                            <span class="py-2">{{ $weekday }}</span>
+                        @endforeach
+                    </div>
+                    <div class="grid grid-cols-7 gap-1.5">
+                        @foreach ($calendarDays as $day)
+                            @if ($day['inPeriod'] && $day['stats'])
+                                <a href="{{ route($agendaDayRoute, $day['date']->format('Y-m-d')) }}" aria-label="{{ $day['date']->format('d/m/Y') }}: {{ $day['stats']['availableDoctors'] }} médicos disponibles, {{ $day['stats']['freeSlots'] }} horarios libres" class="min-h-24 rounded-lg border p-2 transition {{ $availabilityClasses[$day['stats']['status']] }}">
+                                    <span class="text-sm font-bold">{{ $day['date']->day }}</span>
+                                    <span class="mt-2 block text-[10px] leading-4">{{ $day['stats']['availableDoctors'] }}/{{ $day['stats']['totalDoctors'] }} médicos</span>
+                                    <span class="block text-[10px] leading-4">{{ $day['stats']['freeSlots'] }} horarios libres</span>
+                                </a>
+                            @else
+                                <span class="min-h-24 rounded-lg border border-slate-100 bg-slate-50 p-2 text-sm text-slate-300">{{ $day['date']->day }}</span>
+                            @endif
+                        @endforeach
+                    </div>
+                </div>
+            </div>
+        @endif
+    </section>
+
 @endsection
