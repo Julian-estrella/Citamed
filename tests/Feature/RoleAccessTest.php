@@ -357,31 +357,11 @@ class RoleAccessTest extends TestCase
             ->assertSee('Paciente Cita Encontrada')
             ->assertDontSee('Paciente Cita Excluida');
 
-        $agendaDoctor = User::factory()->create(['role' => 'medico', 'name' => 'Doctora Agenda']);
-        $agendaPatient = Patient::create(['name' => 'Paciente Agenda Encontrado']);
-        $otherAgendaPatient = Patient::create(['name' => 'Paciente Agenda Excluido']);
-        Appointment::create([
-            'patient_id' => $agendaPatient->id,
-            'doctor_id' => $agendaDoctor->id,
-            'scheduled_at' => today()->setTime(9, 30),
-            'reason' => 'Control diario',
-            'status' => Appointment::STATUS_SCHEDULED,
-        ]);
-        Appointment::create([
-            'patient_id' => $otherAgendaPatient->id,
-            'doctor_id' => $agendaDoctor->id,
-            'scheduled_at' => today()->setTime(10, 0),
-            'reason' => 'Consulta diaria',
-            'status' => Appointment::STATUS_CONFIRMED,
-        ]);
-
-        $this->get(route('admin.agenda', [
-            'scheduled_time' => '09:30',
-            'status' => Appointment::STATUS_SCHEDULED,
-        ]))
+        $this->get(route('admin.agenda'))
             ->assertOk()
-            ->assertSee('Paciente Agenda Encontrado')
-            ->assertDontSee('Paciente Agenda Excluido');
+            ->assertSee('Disponibilidad médica')
+            ->assertDontSee('agenda-filters')
+            ->assertDontSee('No se encontraron citas para esos filtros.');
     }
 
     public function test_patient_actions_allow_editing_and_records_but_protect_assigned_access_and_deletion(): void
@@ -834,22 +814,175 @@ class RoleAccessTest extends TestCase
             ->assertSee('Ver agenda');
 
         $room = \App\Models\ConsultationRoom::query()->where('room_number', 1)->firstOrFail();
-        $this->get(route('admin.consultorios.availability', $room))
+        $this->get(route('admin.consultorios.availability', ['room' => $room, 'view' => 'day', 'anchor' => today()->toDateString()]))
             ->assertOk()
-            ->assertSee('Lunes')
-            ->assertSee('Sin médicos asignados');
+            ->assertSee('Día')
+            ->assertSee('Sin médicos programados');
+        $this->get(route('admin.consultorios.availability', ['room' => $room, 'view' => 'week', 'anchor' => today()->toDateString()]))
+            ->assertOk()
+            ->assertSee('Semana')
+            ->assertSee('horarios libres');
+        $this->get(route('admin.consultorios.availability', ['room' => $room, 'view' => 'month', 'anchor' => today()->toDateString()]))
+            ->assertOk()
+            ->assertSee('Mes')
+            ->assertSee('Alta disponibilidad');
 
         $this->post(route('admin.consultorios.store'), ['specialty' => 'Radiología'])
             ->assertRedirect(route('admin.consultorios'));
-        $this->assertDatabaseHas('consultation_rooms', [
-            'room_number' => 6,
-            'specialty' => 'Radiología',
-        ]);
+        $room = \App\Models\ConsultationRoom::query()->where('room_number', 6)->firstOrFail();
+        $this->put(route('admin.consultorios.update', $room), ['specialty' => 'Nutrición'])
+            ->assertRedirect(route('admin.consultorios'));
+        $this->assertDatabaseHas('consultation_rooms', ['room_number' => 6, 'specialty' => 'Nutrición']);
 
-        $this->get(route('admin.consultorios', ['specialty' => 'Radiología']))
+        $this->patch(route('admin.consultorios.toggle-status', $room))
+            ->assertRedirect(route('admin.consultorios'));
+        $this->assertDatabaseHas('consultation_rooms', ['room_number' => 6, 'is_active' => false]);
+
+        $this->get(route('admin.consultorios', ['specialty' => 'Nutrición']))
             ->assertOk()
             ->assertSee('Consultorio 6')
             ->assertDontSee('Consultorio 1');
+
+        $this->delete(route('admin.consultorios.destroy', $room))
+            ->assertRedirect(route('admin.consultorios'));
+        $this->assertSoftDeleted('consultation_rooms', ['id' => $room->id]);
+        $this->post(route('admin.consultorios.store'), ['specialty' => 'Radiología'])
+            ->assertRedirect(route('admin.consultorios'));
+        $this->assertDatabaseHas('consultation_rooms', ['room_number' => 7, 'specialty' => 'Radiología']);
+    }
+
+    public function test_consultation_room_availability_changes_detail_by_day_week_and_month(): void
+    {
+        $admin = User::factory()->create(['role' => 'administrador']);
+        $doctor = User::factory()->create(['role' => 'medico', 'name' => 'Doctora por consultorio']);
+        $profile = $doctor->doctorProfile()->create([
+            'professional_title' => 'Dra.',
+            'license_number' => 'CED-ROOM-CAL',
+            'specialty' => 'Medicina general',
+            'phone' => '74747474',
+            'appointment_duration' => 30,
+            'office' => 'Consultorio 1',
+        ]);
+        $profile->shifts()->create([
+            'day_of_week' => today()->dayOfWeekIso,
+            'start_time' => '07:00',
+            'end_time' => '08:00',
+        ]);
+        $patient = Patient::create(['name' => 'Paciente del consultorio']);
+        Appointment::create([
+            'patient_id' => $patient->id,
+            'doctor_id' => $doctor->id,
+            'scheduled_at' => today()->setTime(7, 0),
+            'reason' => 'Control',
+            'status' => Appointment::STATUS_SCHEDULED,
+        ]);
+        $room = \App\Models\ConsultationRoom::query()->where('room_number', 1)->firstOrFail();
+        $anchor = today()->toDateString();
+
+        $this->actingAs($admin)->get(route('admin.consultorios.availability', ['room' => $room, 'view' => 'day', 'anchor' => $anchor]))
+            ->assertOk()
+            ->assertSee('Doctora por consultorio')
+            ->assertSee('Paciente del consultorio')
+            ->assertSee('07:00–07:30 · Ocupado')
+            ->assertSee('07:30–08:00')
+            ->assertSee('Periodo anterior')
+            ->assertSee('Periodo siguiente');
+
+        $this->get(route('admin.consultorios.availability', ['room' => $room, 'view' => 'week', 'anchor' => $anchor]))
+            ->assertOk()
+            ->assertSee('1 / 1 médicos')
+            ->assertSee('1 libres · 1 ocupados')
+            ->assertDontSee('Doctora por consultorio');
+
+        $this->get(route('admin.consultorios.availability', ['room' => $room, 'view' => 'month', 'anchor' => $anchor]))
+            ->assertOk()
+            ->assertSee('1 libres')
+            ->assertDontSee('Paciente del consultorio')
+            ->assertDontSee('Doctora por consultorio');
+    }
+
+    public function test_doctors_can_only_be_assigned_to_active_rooms_with_their_specialty(): void
+    {
+        $admin = User::factory()->create(['role' => 'administrador']);
+        $room = \App\Models\ConsultationRoom::query()->where('room_number', 2)->firstOrFail();
+        $room->update(['specialty' => 'Radiología']);
+
+        $this->actingAs($admin)->get(route('admin.doctors.create'))
+            ->assertOk()
+            ->assertSee('data-specialty="Radiología"', false)
+            ->assertSee('Consultorio 2 · Radiología');
+
+        $doctorData = [
+            'name' => 'Doctor de radiología',
+            'email' => 'radiologia@example.test',
+            'password' => 'Password1!',
+            'password_confirmation' => 'Password1!',
+            'professional_title' => 'Dr.',
+            'license_number' => 'CED-RAD-1',
+            'specialty' => 'Medicina general',
+            'phone' => '75757575',
+            'appointment_duration' => 30,
+            'office' => 'Consultorio 2',
+            'is_active' => '1',
+            'shifts' => [['days' => ['1'], 'session' => 'matutino']],
+        ];
+        $this->post(route('admin.doctors.store'), $doctorData)->assertSessionHasErrors('office');
+
+        $doctorData['specialty'] = 'Radiología';
+        $compatibleResponse = $this->post(route('admin.doctors.store'), $doctorData);
+        $compatibleResponse->assertRedirect(route('admin.doctors'))->assertSessionHasNoErrors();
+        $doctor = User::where('email', 'radiologia@example.test')->firstOrFail();
+
+        $this->put(route('admin.consultorios.update', $room), ['specialty' => 'Pediatría'])
+            ->assertSessionHasErrors('specialty');
+
+        $this->patch(route('admin.consultorios.toggle-status', $room))->assertRedirect(route('admin.consultorios'));
+        $this->get(route('admin.doctors.create'))
+            ->assertOk()
+            ->assertDontSee('Consultorio 2 · Radiología');
+        $this->delete(route('admin.consultorios.destroy', $room))
+            ->assertRedirect(route('admin.consultorios'))
+            ->assertSessionHas('error');
+        $this->assertNotNull($doctor->doctorProfile()->first());
+    }
+
+    public function test_doctor_directory_can_toggle_and_delete_accounts_without_deleting_appointments(): void
+    {
+        $admin = User::factory()->create(['role' => 'administrador']);
+        $doctor = User::factory()->create(['role' => 'medico', 'name' => 'Doctor Acciones']);
+        $patient = Patient::create(['name' => 'Paciente con cita']);
+        $appointment = Appointment::create([
+            'patient_id' => $patient->id,
+            'doctor_id' => $doctor->id,
+            'scheduled_at' => now()->addDay(),
+            'reason' => 'Consulta de seguimiento',
+            'status' => Appointment::STATUS_SCHEDULED,
+        ]);
+
+        $this->actingAs($admin)->get(route('admin.doctors'))
+            ->assertOk()
+            ->assertSee('Contacto')
+            ->assertSee('Acciones')
+            ->assertSee('table-fixed')
+            ->assertDontSee('min-w-[950px]')
+            ->assertSee('aria-label="Desactivar cuenta de Doctor Acciones"', false)
+            ->assertSee('aria-label="Eliminar médico Doctor Acciones"', false);
+
+        $this->patch(route('admin.doctors.toggle-status', $doctor))
+            ->assertRedirect(route('admin.doctors'));
+        $this->assertFalse($doctor->fresh()->isActive());
+
+        $this->patch(route('admin.doctors.toggle-status', $doctor))
+            ->assertRedirect(route('admin.doctors'));
+        $this->assertTrue($doctor->fresh()->isActive());
+
+        $this->delete(route('admin.doctors.destroy', $doctor))
+            ->assertRedirect(route('admin.doctors'));
+        $this->assertDatabaseMissing('users', ['id' => $doctor->id]);
+        $this->assertDatabaseHas('appointments', [
+            'id' => $appointment->id,
+            'doctor_id' => null,
+        ]);
     }
 
     public function test_agenda_calendar_shows_period_views_availability_colors_and_day_slots(): void

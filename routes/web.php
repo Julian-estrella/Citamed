@@ -70,6 +70,10 @@ Route::middleware([
             ->middleware('permission:gestionar_medicos')->name('admin.doctors.edit');
         Route::put('/admin/medicos/{doctor}', [PanelSectionController::class, 'updateDoctor'])
             ->middleware('permission:gestionar_medicos')->name('admin.doctors.update');
+        Route::patch('/admin/medicos/{doctor}/toggle-status', [PanelSectionController::class, 'toggleDoctorStatus'])
+            ->middleware('permission:gestionar_medicos')->name('admin.doctors.toggle-status');
+        Route::delete('/admin/medicos/{doctor}', [PanelSectionController::class, 'destroyDoctor'])
+            ->middleware('permission:gestionar_medicos')->name('admin.doctors.destroy');
         Route::get('/admin/consultorios', [PanelSectionController::class, 'consultationRooms'])
             ->middleware('permission:gestionar_medicos')->name('admin.consultorios');
         Route::get('/admin/consultorios/create', [PanelSectionController::class, 'createConsultationRoom'])
@@ -145,6 +149,10 @@ Route::middleware([
         ->middleware(['role:recepcion', 'permission:gestionar_medicos'])->name('recepcion.doctors.edit');
     Route::put('/recepcion/medicos/{doctor}', [PanelSectionController::class, 'updateDoctor'])
         ->middleware(['role:recepcion', 'permission:gestionar_medicos'])->name('recepcion.doctors.update');
+    Route::patch('/recepcion/medicos/{doctor}/toggle-status', [PanelSectionController::class, 'toggleDoctorStatus'])
+        ->middleware(['role:recepcion', 'permission:gestionar_medicos'])->name('recepcion.doctors.toggle-status');
+    Route::delete('/recepcion/medicos/{doctor}', [PanelSectionController::class, 'destroyDoctor'])
+        ->middleware(['role:recepcion', 'permission:gestionar_medicos'])->name('recepcion.doctors.destroy');
     Route::get('/recepcion/consultorios', [PanelSectionController::class, 'consultationRooms'])
         ->middleware(['role:recepcion', 'permission:gestionar_medicos'])->name('recepcion.consultorios');
     Route::get('/recepcion/consultorios/create', [PanelSectionController::class, 'createConsultationRoom'])

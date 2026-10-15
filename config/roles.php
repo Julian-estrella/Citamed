@@ -54,6 +54,7 @@ return [
             'gestionar_citas',
             'consultar_agenda',
             'consultar_horarios_disponibles_medicos',
+            'gestionar_medicos',
             'programar_citas',
             'modificar_citas',
             'cancelar_citas',

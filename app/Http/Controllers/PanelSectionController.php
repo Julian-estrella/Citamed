@@ -202,6 +202,33 @@ class PanelSectionController extends Controller
         ]);
     }
 
+    public function toggleDoctorStatus(User $doctor)
+    {
+        abort_unless($doctor->isMedico(), 404);
+
+        if ($doctor->isSuperAdmin() || (auth()->id() === $doctor->id && $doctor->isActive())) {
+            return redirect()->route($this->doctorsRoute())->with('error', 'No puedes desactivar esta cuenta médica.');
+        }
+
+        $doctor->is_active = ! $doctor->is_active;
+        $doctor->save();
+
+        return redirect()->route($this->doctorsRoute())->with('success', 'Estado de la cuenta médica actualizado.');
+    }
+
+    public function destroyDoctor(User $doctor)
+    {
+        abort_unless($doctor->isMedico(), 404);
+
+        if ($doctor->isSuperAdmin() || auth()->id() === $doctor->id) {
+            return redirect()->route($this->doctorsRoute())->with('error', 'No puedes eliminar esta cuenta médica.');
+        }
+
+        $doctor->delete();
+
+        return redirect()->route($this->doctorsRoute())->with('success', 'Cuenta médica eliminada. Las citas existentes se conservaron sin médico asignado.');
+    }
+
     public function createDoctor()
     {
         return view('admin.medicos.create', [
@@ -219,7 +246,7 @@ class PanelSectionController extends Controller
 
     public function storeDoctor(Request $request)
     {
-        $validator = Validator::make($request->all(), array_merge($this->doctorProfileRules(), [
+        $validator = Validator::make($request->all(), array_merge($this->doctorProfileRules(specialty: $request->input('specialty')), [
             'name' => ['required', 'string', 'max:255', Rule::unique('users', 'name')],
             'email' => ['required', 'string', 'email', 'max:255', Rule::unique('users', 'email')],
             'password' => ['required', 'string', 'min:8', 'max:12', 'confirmed', 'regex:/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z\d]).+$/'],
@@ -269,7 +296,7 @@ class PanelSectionController extends Controller
     {
         abort_unless($doctor->isMedico(), 404);
 
-        $validator = Validator::make($request->all(), $this->doctorProfileRules($doctor));
+        $validator = Validator::make($request->all(), $this->doctorProfileRules($doctor, $request->input('specialty')));
         $this->addDoctorShiftValidation($validator, $request, $doctor);
         $validated = $validator->validate();
 
@@ -399,31 +426,81 @@ class PanelSectionController extends Controller
 
     public function destroyConsultationRoom(ConsultationRoom $room)
     {
+        $routePrefix = Auth::user()->isAdmin() ? 'admin' : 'recepcion';
         if (DoctorProfile::query()->where('office', $room->label)->exists()) {
-            return back()->with('error', 'No se puede borrar un consultorio con médicos asignados. Desactívalo o reasigna primero a los médicos.');
+            return redirect()->route($routePrefix.'.consultorios')
+                ->with('error', 'No se puede borrar un consultorio con médicos asignados. Desactívalo o reasigna primero a los médicos.');
         }
 
         $room->delete();
-        $routePrefix = Auth::user()->isAdmin() ? 'admin' : 'recepcion';
 
         return redirect()->route($routePrefix.'.consultorios')
             ->with('success', $room->label.' eliminado correctamente.');
     }
 
-    public function consultationRoomAvailability(ConsultationRoom $room)
+    public function consultationRoomAvailability(Request $request, ConsultationRoom $room)
     {
-        $doctors = DoctorProfile::query()
-            ->with(['user', 'shifts'])
-            ->where('office', $room->label)
-            ->get();
+        $filters = $request->validate([
+            'view' => ['nullable', Rule::in(['day', 'week', 'month'])],
+            'anchor' => ['nullable', 'date_format:Y-m-d'],
+        ]);
+        $view = $filters['view'] ?? 'month';
+        $anchor = isset($filters['anchor']) ? CarbonImmutable::parse($filters['anchor']) : CarbonImmutable::today();
+        $rangeStart = match ($view) {
+            'day' => $anchor->startOfDay(),
+            'week' => $anchor->startOfWeek(),
+            default => $anchor->startOfMonth(),
+        };
+        $rangeEnd = match ($view) {
+            'day' => $anchor->endOfDay(),
+            'week' => $anchor->endOfWeek(),
+            default => $anchor->endOfMonth(),
+        };
+        $availability = $this->doctorAvailabilityForRange($rangeStart, $rangeEnd, Auth::user(), $room->label);
+        $calendarDays = [];
+
+        if ($view === 'week' || $view === 'month') {
+            $gridStart = $view === 'week' ? $rangeStart : $rangeStart->startOfWeek();
+            $gridEnd = $view === 'week' ? $rangeEnd : $rangeEnd->endOfWeek();
+            for ($date = $gridStart; $date->lte($gridEnd); $date = $date->addDay()) {
+                $calendarDays[] = [
+                    'date' => $date,
+                    'stats' => $availability['days'][$date->format('Y-m-d')] ?? null,
+                    'inPeriod' => $view === 'week' || $date->month === $anchor->month,
+                ];
+            }
+        }
+
+        $previous = match ($view) {
+            'day' => $anchor->subDay(),
+            'week' => $anchor->subWeek(),
+            default => $anchor->subMonth(),
+        };
+        $next = match ($view) {
+            'day' => $anchor->addDay(),
+            'week' => $anchor->addWeek(),
+            default => $anchor->addMonth(),
+        };
         $routePrefix = Auth::user()->isAdmin() ? 'admin' : 'recepcion';
 
         return view('admin.consultorios.availability', [
             'room' => $room,
-            'doctors' => $doctors,
+            'view' => $view,
+            'anchor' => $anchor,
+            'periodTitle' => match ($view) {
+                'day' => $anchor->locale('es')->translatedFormat('l, j \\d\\e F Y'),
+                'week' => $rangeStart->format('d/m/Y').' – '.$rangeEnd->format('d/m/Y'),
+                default => $anchor->locale('es')->translatedFormat('F Y'),
+            },
+            'previous' => $previous->format('Y-m-d'),
+            'next' => $next->format('Y-m-d'),
+            'availability' => $availability['days'],
+            'calendarDays' => $calendarDays,
+            'weekDayLabels' => array_values(config('clinic.days')),
             'daysOfWeek' => config('clinic.days'),
             'workShifts' => config('clinic.shifts'),
             'listRoute' => $routePrefix.'.consultorios',
+            'availabilityRoute' => $routePrefix.'.consultorios.availability',
         ]);
     }
 
@@ -499,11 +576,6 @@ class PanelSectionController extends Controller
     {
         $user = Auth::user();
         $filters = $request->validate([
-            'scheduled_time' => ['nullable', 'date_format:H:i'],
-            'patient' => ['nullable', 'string', 'max:255'],
-            'doctor' => ['nullable', 'string', 'max:255'],
-            'reason' => ['nullable', 'string', 'max:255'],
-            'status' => ['nullable', 'in:'.Appointment::STATUS_SCHEDULED.','.Appointment::STATUS_CONFIRMED],
             'anchor' => ['nullable', 'date_format:Y-m-d'],
             'month' => ['nullable', 'date_format:Y-m'],
             'view' => ['nullable', Rule::in(['week', 'month', 'year'])],
@@ -512,43 +584,12 @@ class PanelSectionController extends Controller
         $referenceDate = isset($filters['anchor'])
             ? CarbonImmutable::parse($filters['anchor'])
             : (isset($filters['month']) ? CarbonImmutable::createFromFormat('!Y-m', $filters['month']) : CarbonImmutable::today());
-        $query = Appointment::query()
-            ->whereDate('scheduled_at', today())
-            ->whereIn('status', [Appointment::STATUS_SCHEDULED, Appointment::STATUS_CONFIRMED])
-            ->whereHas('patient', fn ($patient) => $patient->where('is_active', true))
-            ->whereHas('doctor', fn ($doctor) => $doctor->where('is_active', true))
-            ->with(['patient', 'doctor']);
-
-        if ($user->isMedico()) {
-            $query->where('doctor_id', $user->id);
-        }
-
-        if (! empty($filters['scheduled_time'])) {
-            $query->whereTime('scheduled_at', $filters['scheduled_time'].':00');
-        }
-
-        foreach (['patient' => 'patient', 'doctor' => 'doctor'] as $filter => $relation) {
-            if (! empty($filters[$filter])) {
-                $query->whereHas($relation, fn ($related) => $related->where('name', 'like', '%'.$filters[$filter].'%'));
-            }
-        }
-
-        if (! empty($filters['reason'])) {
-            $query->where('reason', 'like', '%'.$filters['reason'].'%');
-        }
-
-        if (! empty($filters['status'])) {
-            $query->where('status', $filters['status']);
-        }
-
         $routePrefix = $user->isMedico() ? 'medico' : ($user->isAdmin() ? 'admin' : 'recepcion');
 
         return view('admin.agenda.index', array_merge([
             'user' => $user,
             'title' => $user->isMedico() ? 'Mi horario' : 'Agenda',
             'description' => 'Consulta la planificación disponible para tu rol.',
-            'appointments' => $query->orderBy('scheduled_at')->get(),
-            'filters' => $filters,
             'agendaRoute' => $routePrefix.'.agenda',
             'agendaDayRoute' => $routePrefix.'.agenda.day',
         ], $this->agendaCalendarData($referenceDate, $calendarView, $user)));
@@ -646,12 +687,13 @@ class PanelSectionController extends Controller
         ];
     }
 
-    private function doctorAvailabilityForRange(CarbonImmutable $start, CarbonImmutable $end, User $user): array
+    private function doctorAvailabilityForRange(CarbonImmutable $start, CarbonImmutable $end, User $user, ?string $office = null): array
     {
         $profiles = DoctorProfile::query()
             ->whereHas('user', fn ($query) => $query->where('is_active', true))
             ->with(['user', 'shifts'])
             ->when($user->isMedico(), fn ($query) => $query->where('user_id', $user->id))
+            ->when($office, fn ($query) => $query->where('office', $office))
             ->get();
         $appointments = Appointment::query()
             ->whereBetween('scheduled_at', [$start->startOfDay(), $end->endOfDay()])
@@ -750,14 +792,12 @@ class PanelSectionController extends Controller
             'user' => $user,
             'title' => 'Mi disponibilidad',
             'description' => 'Administra los espacios disponibles de atención.',
-            'appointments' => collect(),
-            'filters' => [],
             'agendaRoute' => $routePrefix.'.agenda',
             'agendaDayRoute' => $routePrefix.'.agenda.day',
         ], $this->agendaCalendarData(CarbonImmutable::today(), 'month', $user)));
     }
 
-    private function doctorProfileRules(?User $doctor = null): array
+    private function doctorProfileRules(?User $doctor = null, ?string $specialty = null): array
     {
         $profile = $doctor?->doctorProfile;
         $uniqueLicense = Rule::unique('doctor_profiles', 'license_number');
@@ -771,7 +811,7 @@ class PanelSectionController extends Controller
             'specialty' => ['required', Rule::in(config('clinic.specialties'))],
             'phone' => ['required', 'regex:/\A[0-9]{1,8}\z/', new UniqueClinicPhone('doctor_profiles', $profile?->id)],
             'appointment_duration' => ['required', 'integer', Rule::in([20, 30, 45])],
-            'office' => ['required', Rule::in($this->consultationRoomNames())],
+            'office' => ['required', Rule::in($this->consultationRoomNames($specialty, includeOffice: $profile?->office))],
             'is_active' => ['required', 'boolean'],
             'shifts' => ['required', 'array', 'min:1', 'max:14'],
             'shifts.*.days' => ['required', 'array', 'min:1', 'max:7'],
@@ -784,18 +824,23 @@ class PanelSectionController extends Controller
     {
         $validator->after(function ($validator) use ($request, $doctor) {
             $office = $request->input('office');
+            $specialty = $request->input('specialty');
             $shifts = $request->input('shifts', []);
             $workShifts = config('clinic.shifts');
             $assignedShifts = [];
+            $allowedRooms = $this->consultationRoomNames($specialty, includeOffice: $doctor?->doctorProfile?->office);
 
-            if (! is_array($shifts) || ! in_array($office, $this->consultationRoomNames(), true)) {
+            if (! is_array($shifts) || ! in_array($office, $allowedRooms, true)) {
                 return;
             }
 
             $roomNumber = (int) preg_replace('/\D+/', '', $office);
             $room = ConsultationRoom::query()->where('room_number', $roomNumber)->first();
-            if ($room && $request->input('specialty') !== $room->specialty) {
+            if ($room && $specialty !== $room->specialty) {
                 $validator->errors()->add('specialty', 'La especialidad del médico debe coincidir con la del consultorio.');
+            }
+            if ($room && ! $room->is_active && $doctor?->doctorProfile?->office !== $office) {
+                $validator->errors()->add('office', 'Selecciona un consultorio activo.');
             }
 
             foreach ($shifts as $index => $shift) {
@@ -877,13 +922,44 @@ class PanelSectionController extends Controller
         return Auth::user()->isAdmin() ? 'admin.doctors' : 'recepcion.doctors';
     }
 
-    private function consultationRoomNames(): array
+    private function consultationRoomNames(?string $specialty = null, bool $activeOnly = true, ?string $includeOffice = null): array
     {
-        return ConsultationRoom::query()
-            ->orderBy('room_number')
-            ->get()
+        $query = ConsultationRoom::query();
+        if ($activeOnly) {
+            $query->where('is_active', true);
+        }
+        if ($specialty !== null) {
+            $query->where('specialty', $specialty);
+        }
+
+        $rooms = $query->orderBy('room_number')->get();
+        if ($includeOffice && ! $rooms->contains(fn (ConsultationRoom $room) => $room->label === $includeOffice)) {
+            $roomNumber = (int) preg_replace('/\D+/', '', $includeOffice);
+            $existingRoom = ConsultationRoom::query()->where('room_number', $roomNumber)->first();
+            if ($existingRoom && ($specialty === null || $existingRoom->specialty === $specialty)) {
+                $rooms->push($existingRoom);
+            }
+        }
+
+        return $rooms
             ->map(fn (ConsultationRoom $room) => $room->label)
             ->all();
+    }
+
+    private function roomsForDoctor(User $doctor): \Illuminate\Support\Collection
+    {
+        $rooms = ConsultationRoom::query()->where('is_active', true)->orderBy('room_number')->get();
+        $office = $doctor->doctorProfile?->office;
+
+        if ($office && ! $rooms->contains(fn (ConsultationRoom $room) => $room->label === $office)) {
+            $roomNumber = (int) preg_replace('/\D+/', '', $office);
+            $assignedRoom = ConsultationRoom::query()->where('room_number', $roomNumber)->first();
+            if ($assignedRoom) {
+                $rooms->push($assignedRoom);
+            }
+        }
+
+        return $rooms;
     }
 
     private function doctorCreateRoute(): string

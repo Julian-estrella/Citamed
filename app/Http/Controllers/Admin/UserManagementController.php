@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Rules\UniqueClinicPhone;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
@@ -11,6 +12,8 @@ use Illuminate\Validation\Rules\Password;
 
 class UserManagementController extends Controller
 {
+    private const SUPER_ADMIN_STATUS_ERROR = 'No puedes desactivar al super administrador.';
+
     public function dashboard()
     {
         $users = User::latest()->get();
@@ -67,6 +70,7 @@ class UserManagementController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255', Rule::unique('users', 'name')],
             'email' => ['required', 'string', 'email', 'max:255', Rule::unique('users', 'email')],
+            'phone' => ['nullable', 'regex:/\A[0-9]{1,8}\z/', new UniqueClinicPhone('users')],
             'password' => [
                 'required',
                 'string',
@@ -80,10 +84,19 @@ class UserManagementController extends Controller
         User::create([
             'name' => $validated['name'],
             'email' => $validated['email'],
+            'phone' => $validated['phone'] ?? null,
             'password' => Hash::make($validated['password']),
             'role' => $validated['role'],
             'is_active' => (bool) ($validated['is_active'] ?? true),
         ]);
+
+        $user = User::where('email', $validated['email'])->firstOrFail();
+
+        if ($user->isMedico()) {
+            return redirect()->route('admin.doctors.edit', $user)
+                ->with('success', 'Cuenta creada. Completa los datos profesionales del médico.');
+        }
+
         return redirect()->route('admin.users')->with('success', 'Usuario registrado correctamente.');
     }
 
@@ -104,6 +117,7 @@ class UserManagementController extends Controller
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255', Rule::unique('users', 'name')->ignore($user->id)],
             'email' => ['required', 'string', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
+            'phone' => ['nullable', 'regex:/\A[0-9]{1,8}\z/', new UniqueClinicPhone('users', $user->id)],
             'password' => [
                 'nullable',
                 'string',
@@ -114,8 +128,13 @@ class UserManagementController extends Controller
             'is_active' => ['required', 'boolean'],
         ]);
 
+        if ($user->isSuperAdmin() && ! (bool) $validated['is_active']) {
+            return redirect()->route('admin.users')->with('error', self::SUPER_ADMIN_STATUS_ERROR);
+        }
+
         $user->name = $validated['name'];
         $user->email = $validated['email'];
+        $user->phone = $validated['phone'] ?? null;
         $user->role = $validated['role'];
         $user->is_active = (bool) $validated['is_active'];
 
@@ -130,6 +149,10 @@ class UserManagementController extends Controller
 
     public function toggleStatus(User $user)
     {
+        if ($user->isSuperAdmin() && $user->isActive()) {
+            return redirect()->route('admin.users')->with('error', self::SUPER_ADMIN_STATUS_ERROR);
+        }
+
         $user->is_active = ! $user->is_active;
         $user->save();
 
