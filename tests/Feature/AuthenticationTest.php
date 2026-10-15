@@ -41,4 +41,19 @@ class AuthenticationTest extends TestCase
 
         $this->assertGuest();
     }
+
+    public function test_inactive_users_cannot_authenticate_and_receive_a_message(): void
+    {
+        $user = User::factory()->create(['is_active' => false]);
+
+        $response = $this->post('/login', [
+            'email' => $user->email,
+            'password' => 'password',
+        ]);
+
+        $response->assertSessionHasErrors([
+            'email' => 'tu usuario esta inactivo contactate con administración',
+        ]);
+        $this->assertGuest();
+    }
 }

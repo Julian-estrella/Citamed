@@ -48,8 +48,8 @@
                     @error('gender')<p class="mt-1 text-xs font-medium text-red-600">{{ $message }}</p>@enderror
                 </div>
                 <div>
-                    <label for="phone" class="mb-1 block text-sm font-medium text-slate-700">Teléfono de contacto</label>
-                    <input id="phone" type="tel" name="phone" value="{{ old('phone') }}" minlength="10" maxlength="10" inputmode="numeric" pattern="[0-9]{10}" autocomplete="tel" class="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-[#223FAA]">
+                    <label for="phone" class="mb-1 block text-sm font-medium text-slate-700">Teléfono de contacto (máximo 8 dígitos)</label>
+                    <input id="phone" type="tel" name="phone" value="{{ old('phone') }}" maxlength="8" inputmode="numeric" pattern="[0-9]{1,8}" autocomplete="tel" class="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-[#223FAA]">
                     @error('phone')<p class="mt-1 text-xs font-medium text-red-600">{{ $message }}</p>@enderror
                 </div>
                 <div>
@@ -88,7 +88,7 @@
                 </div>
                 <div>
                     <label for="emergency_contact_phone" class="mb-1 block text-sm font-medium text-slate-700">Teléfono</label>
-                    <input id="emergency_contact_phone" type="tel" name="emergency_contact_phone" value="{{ old('emergency_contact_phone') }}" minlength="10" maxlength="10" inputmode="numeric" pattern="[0-9]{10}" class="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-[#223FAA]">
+                    <input id="emergency_contact_phone" type="tel" name="emergency_contact_phone" value="{{ old('emergency_contact_phone') }}" maxlength="8" inputmode="numeric" pattern="[0-9]{1,8}" class="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-[#223FAA]">
                     @error('emergency_contact_phone')<p class="mt-1 text-xs font-medium text-red-600">{{ $message }}</p>@enderror
                 </div>
             </div>

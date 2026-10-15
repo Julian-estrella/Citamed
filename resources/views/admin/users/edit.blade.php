@@ -42,6 +42,12 @@
                     @enderror
                 </div>
 
+                <div class="md:col-span-2">
+                    <label for="phone" class="mb-1 block text-sm font-medium text-slate-700">Teléfono (máximo 8 dígitos)</label>
+                    <input id="phone" type="tel" name="phone" value="{{ old('phone', $user->phone) }}" maxlength="8" inputmode="numeric" pattern="[0-9]{1,8}" autocomplete="tel" class="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-[#223FAA]">
+                    @error('phone')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+                </div>
+
                 <div>
                     <label class="mb-1 block text-sm font-medium text-slate-700">Tipo de usuario</label>
                     <select name="role" class="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-[#223FAA]" required>
@@ -56,10 +62,17 @@
 
                 <div>
                     <label class="mb-1 block text-sm font-medium text-slate-700">Estado</label>
-                    <select name="is_active" class="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-[#223FAA]" required>
-                        <option value="1" {{ old('is_active', $user->is_active) == 1 ? 'selected' : '' }}>Activo</option>
-                        <option value="0" {{ old('is_active', $user->is_active) == 0 ? 'selected' : '' }}>Inactivo</option>
-                    </select>
+                    @if ($user->isSuperAdmin())
+                        <input type="hidden" name="is_active" value="{{ $user->is_active ? '1' : '0' }}">
+                        <select disabled class="w-full rounded-2xl border border-slate-200 bg-slate-100 px-3 py-2.5 text-sm">
+                            <option>{{ $user->statusLabel() }}</option>
+                        </select>
+                    @else
+                        <select name="is_active" class="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-[#223FAA]" required>
+                            <option value="1" {{ old('is_active', $user->is_active) == 1 ? 'selected' : '' }}>Activo</option>
+                            <option value="0" {{ old('is_active', $user->is_active) == 0 ? 'selected' : '' }}>Inactivo</option>
+                        </select>
+                    @endif
                     @error('is_active')
                         <p class="mt-1 text-xs text-red-600">{{ $message }}</p>
                     @enderror

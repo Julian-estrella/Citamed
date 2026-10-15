@@ -12,6 +12,7 @@ Route::get('/', function () {
 Route::middleware([
     'auth:sanctum',
     config('jetstream.auth_session'),
+    'active',
     'verified',
 ])->group(function () {
     Route::get('/dashboard', function () {
@@ -61,6 +62,30 @@ Route::middleware([
             ->middleware('permission:gestionar_pacientes')->name('admin.patients.destroy');
         Route::get('/admin/medicos', [PanelSectionController::class, 'doctors'])
             ->middleware('permission:gestionar_medicos')->name('admin.doctors');
+        Route::get('/admin/medicos/create', [PanelSectionController::class, 'createDoctor'])
+            ->middleware('permission:gestionar_medicos')->name('admin.doctors.create');
+        Route::post('/admin/medicos', [PanelSectionController::class, 'storeDoctor'])
+            ->middleware('permission:gestionar_medicos')->name('admin.doctors.store');
+        Route::get('/admin/medicos/{doctor}/edit', [PanelSectionController::class, 'editDoctor'])
+            ->middleware('permission:gestionar_medicos')->name('admin.doctors.edit');
+        Route::put('/admin/medicos/{doctor}', [PanelSectionController::class, 'updateDoctor'])
+            ->middleware('permission:gestionar_medicos')->name('admin.doctors.update');
+        Route::get('/admin/consultorios', [PanelSectionController::class, 'consultationRooms'])
+            ->middleware('permission:gestionar_medicos')->name('admin.consultorios');
+        Route::get('/admin/consultorios/create', [PanelSectionController::class, 'createConsultationRoom'])
+            ->middleware('permission:gestionar_medicos')->name('admin.consultorios.create');
+        Route::post('/admin/consultorios', [PanelSectionController::class, 'storeConsultationRoom'])
+            ->middleware('permission:gestionar_medicos')->name('admin.consultorios.store');
+        Route::get('/admin/consultorios/{room}/edit', [PanelSectionController::class, 'editConsultationRoom'])
+            ->middleware('permission:gestionar_medicos')->name('admin.consultorios.edit');
+        Route::put('/admin/consultorios/{room}', [PanelSectionController::class, 'updateConsultationRoom'])
+            ->middleware('permission:gestionar_medicos')->name('admin.consultorios.update');
+        Route::patch('/admin/consultorios/{room}/toggle-status', [PanelSectionController::class, 'toggleConsultationRoom'])
+            ->middleware('permission:gestionar_medicos')->name('admin.consultorios.toggle-status');
+        Route::delete('/admin/consultorios/{room}', [PanelSectionController::class, 'destroyConsultationRoom'])
+            ->middleware('permission:gestionar_medicos')->name('admin.consultorios.destroy');
+        Route::get('/admin/consultorios/{room}/disponibilidad', [PanelSectionController::class, 'consultationRoomAvailability'])
+            ->middleware('permission:gestionar_medicos')->name('admin.consultorios.availability');
         Route::get('/admin/citas', [PanelSectionController::class, 'appointments'])
             ->middleware('permission:gestionar_citas')->name('admin.appointments');
         Route::post('/admin/citas', [PanelSectionController::class, 'storeAppointment'])
@@ -69,6 +94,9 @@ Route::middleware([
             ->middleware('permission:gestionar_citas')->name('admin.appointments.cancel');
         Route::get('/admin/agenda', [PanelSectionController::class, 'agenda'])
             ->middleware('permission:consultar_agenda')->name('admin.agenda');
+        Route::get('/admin/agenda/{date}', [PanelSectionController::class, 'agendaDay'])
+            ->where('date', '\\d{4}-\\d{2}-\\d{2}')
+            ->middleware('permission:consultar_agenda')->name('admin.agenda.day');
     });
 
     Route::middleware(['role:medico', 'permission:consultar_panel_principal_medico'])->group(function () {
@@ -87,6 +115,9 @@ Route::middleware([
         ->middleware(['role:medico', 'permission:consultar_citas'])->name('medico.appointments');
     Route::get('/medico/agenda', [PanelSectionController::class, 'agenda'])
         ->middleware(['role:medico', 'permission:gestionar_horario_atencion'])->name('medico.agenda');
+    Route::get('/medico/agenda/{date}', [PanelSectionController::class, 'agendaDay'])
+        ->where('date', '\\d{4}-\\d{2}-\\d{2}')
+        ->middleware(['role:medico', 'permission:gestionar_horario_atencion'])->name('medico.agenda.day');
     Route::get('/medico/disponibilidad', [PanelSectionController::class, 'availability'])
         ->middleware(['role:medico', 'permission:gestionar_disponibilidad'])->name('medico.availability');
 
@@ -106,6 +137,30 @@ Route::middleware([
         ->middleware(['role:recepcion', 'permission:modificar_pacientes'])->name('recepcion.patients.toggle-status');
     Route::get('/recepcion/medicos', [PanelSectionController::class, 'doctors'])
         ->middleware(['role:recepcion', 'permission:consultar_horarios_disponibles_medicos'])->name('recepcion.doctors');
+    Route::get('/recepcion/medicos/create', [PanelSectionController::class, 'createDoctor'])
+        ->middleware(['role:recepcion', 'permission:gestionar_medicos'])->name('recepcion.doctors.create');
+    Route::post('/recepcion/medicos', [PanelSectionController::class, 'storeDoctor'])
+        ->middleware(['role:recepcion', 'permission:gestionar_medicos'])->name('recepcion.doctors.store');
+    Route::get('/recepcion/medicos/{doctor}/edit', [PanelSectionController::class, 'editDoctor'])
+        ->middleware(['role:recepcion', 'permission:gestionar_medicos'])->name('recepcion.doctors.edit');
+    Route::put('/recepcion/medicos/{doctor}', [PanelSectionController::class, 'updateDoctor'])
+        ->middleware(['role:recepcion', 'permission:gestionar_medicos'])->name('recepcion.doctors.update');
+    Route::get('/recepcion/consultorios', [PanelSectionController::class, 'consultationRooms'])
+        ->middleware(['role:recepcion', 'permission:gestionar_medicos'])->name('recepcion.consultorios');
+    Route::get('/recepcion/consultorios/create', [PanelSectionController::class, 'createConsultationRoom'])
+        ->middleware(['role:recepcion', 'permission:gestionar_medicos'])->name('recepcion.consultorios.create');
+    Route::post('/recepcion/consultorios', [PanelSectionController::class, 'storeConsultationRoom'])
+        ->middleware(['role:recepcion', 'permission:gestionar_medicos'])->name('recepcion.consultorios.store');
+    Route::get('/recepcion/consultorios/{room}/edit', [PanelSectionController::class, 'editConsultationRoom'])
+        ->middleware(['role:recepcion', 'permission:gestionar_medicos'])->name('recepcion.consultorios.edit');
+    Route::put('/recepcion/consultorios/{room}', [PanelSectionController::class, 'updateConsultationRoom'])
+        ->middleware(['role:recepcion', 'permission:gestionar_medicos'])->name('recepcion.consultorios.update');
+    Route::patch('/recepcion/consultorios/{room}/toggle-status', [PanelSectionController::class, 'toggleConsultationRoom'])
+        ->middleware(['role:recepcion', 'permission:gestionar_medicos'])->name('recepcion.consultorios.toggle-status');
+    Route::delete('/recepcion/consultorios/{room}', [PanelSectionController::class, 'destroyConsultationRoom'])
+        ->middleware(['role:recepcion', 'permission:gestionar_medicos'])->name('recepcion.consultorios.destroy');
+    Route::get('/recepcion/consultorios/{room}/disponibilidad', [PanelSectionController::class, 'consultationRoomAvailability'])
+        ->middleware(['role:recepcion', 'permission:gestionar_medicos'])->name('recepcion.consultorios.availability');
     Route::get('/recepcion/citas', [PanelSectionController::class, 'appointments'])
         ->middleware(['role:recepcion', 'permission:gestionar_citas'])->name('recepcion.appointments');
     Route::post('/recepcion/citas', [PanelSectionController::class, 'storeAppointment'])
@@ -114,4 +169,7 @@ Route::middleware([
         ->middleware(['role:recepcion', 'permission:cancelar_citas'])->name('recepcion.appointments.cancel');
     Route::get('/recepcion/agenda', [PanelSectionController::class, 'agenda'])
         ->middleware(['role:recepcion', 'permission:consultar_agenda'])->name('recepcion.agenda');
+    Route::get('/recepcion/agenda/{date}', [PanelSectionController::class, 'agendaDay'])
+        ->where('date', '\\d{4}-\\d{2}-\\d{2}')
+        ->middleware(['role:recepcion', 'permission:consultar_agenda'])->name('recepcion.agenda.day');
 });

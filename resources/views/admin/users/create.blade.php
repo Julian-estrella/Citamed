@@ -41,6 +41,12 @@
                     @enderror
                 </div>
 
+                <div class="md:col-span-2">
+                    <label for="phone" class="mb-1 block text-sm font-medium text-slate-700">Teléfono (máximo 8 dígitos)</label>
+                    <input id="phone" type="tel" name="phone" value="{{ old('phone') }}" maxlength="8" inputmode="numeric" pattern="[0-9]{1,8}" autocomplete="tel" class="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-[#223FAA]">
+                    @error('phone')<p class="mt-1 text-xs font-medium text-red-600">{{ $message }}</p>@enderror
+                </div>
+
                 <div>
                     <label class="mb-1 block text-sm font-medium text-slate-700">Tipo de usuario</label>
                     <select name="role" class="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-[#223FAA]" required>

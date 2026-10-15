@@ -48,7 +48,7 @@
                 </div>
                 <div>
                     <label for="phone" class="mb-1 block text-sm font-medium text-slate-700">Teléfono</label>
-                    <input id="phone" type="tel" name="phone" value="{{ old('phone', $patient->phone) }}" minlength="10" maxlength="10" inputmode="numeric" pattern="[0-9]{10}" class="w-full rounded-xl border-slate-200 text-sm">
+                    <input id="phone" type="tel" name="phone" value="{{ old('phone', $patient->phone) }}" maxlength="8" inputmode="numeric" pattern="[0-9]{1,8}" class="w-full rounded-xl border-slate-200 text-sm">
                     @error('phone')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
                 </div>
                 <div>
@@ -93,7 +93,7 @@
                 </div>
                 <div>
                     <label for="emergency_contact_phone" class="mb-1 block text-sm font-medium text-slate-700">Teléfono</label>
-                    <input id="emergency_contact_phone" type="tel" name="emergency_contact_phone" value="{{ old('emergency_contact_phone', $patient->emergency_contact_phone) }}" minlength="10" maxlength="10" inputmode="numeric" pattern="[0-9]{10}" class="w-full rounded-xl border-slate-200 text-sm">
+                    <input id="emergency_contact_phone" type="tel" name="emergency_contact_phone" value="{{ old('emergency_contact_phone', $patient->emergency_contact_phone) }}" maxlength="8" inputmode="numeric" pattern="[0-9]{1,8}" class="w-full rounded-xl border-slate-200 text-sm">
                     @error('emergency_contact_phone')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
                 </div>
             </div>

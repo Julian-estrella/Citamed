@@ -52,4 +52,37 @@ class SuperAdminTest extends TestCase
 
         $this->assertNotNull($superAdmin->fresh());
     }
+
+    public function test_admins_cannot_deactivate_the_super_admin(): void
+    {
+        $superAdmin = User::factory()->create([
+            'role' => 'administrador',
+            'is_super_admin' => true,
+            'is_active' => true,
+        ]);
+        $admin = User::factory()->create(['role' => 'administrador']);
+
+        $this->actingAs($admin)
+            ->get(route('admin.users.edit', $superAdmin))
+            ->assertOk()
+            ->assertSee('select disabled', false)
+            ->assertSee('name="is_active" value="1"', false);
+
+        $this->actingAs($admin)
+            ->patch(route('admin.users.toggle-status', $superAdmin))
+            ->assertRedirect(route('admin.users'))
+            ->assertSessionHas('error', 'No puedes desactivar al super administrador.');
+
+        $this->assertTrue($superAdmin->fresh()->isActive());
+
+        $this->put(route('admin.users.update', $superAdmin), [
+            'name' => $superAdmin->name,
+            'email' => $superAdmin->email,
+            'role' => $superAdmin->role,
+            'is_active' => '0',
+        ])->assertRedirect(route('admin.users'))
+            ->assertSessionHas('error', 'No puedes desactivar al super administrador.');
+
+        $this->assertTrue($superAdmin->fresh()->isActive());
+    }
 }
