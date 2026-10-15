@@ -18,12 +18,14 @@
                 <p class="text-xs font-semibold uppercase tracking-[0.25em] text-[#223FAA]">Panel de atención</p>
                 <h2 class="mt-2 text-3xl font-bold text-[#191346]">{{ $title }}</h2>
             </div>
-            @if ($canRegisterPatients)
-                <a href="{{ route($createRoute) }}" class="inline-flex items-center gap-2 self-start rounded-2xl bg-[#223FAA] px-4 py-2 text-sm font-semibold text-white shadow-md shadow-[#223FAA]/20 md:self-auto">
-                    <i class="fa-solid fa-user-plus"></i>
-                    Nuevo paciente
-                </a>
-            @endif
+            <div class="flex flex-wrap items-center gap-3">
+                @if ($canRegisterPatients)
+                    <a href="{{ route($createRoute) }}" class="inline-flex items-center gap-2 self-start rounded-2xl bg-[#223FAA] px-4 py-2 text-sm font-semibold text-white shadow-md shadow-[#223FAA]/20 md:self-auto">
+                        <i class="fa-solid fa-user-plus"></i>
+                        Nuevo paciente
+                    </a>
+                @endif
+            </div>
         </header>
 
         @if (session('success'))
@@ -50,6 +52,11 @@
                     <button type="submit" aria-label="Buscar" class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-700 hover:bg-slate-200">
                         <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
                     </button>
+                    @if (($search ?? '') !== '')
+                        <a href="{{ route($listRoute, request()->except('search')) }}" aria-label="Quitar búsqueda de pacientes" title="Quitar búsqueda" class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50">
+                            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                        </a>
+                    @endif
                 </form>
             </div>
 

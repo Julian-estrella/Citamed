@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
@@ -35,6 +36,7 @@ class User extends Authenticatable
     protected $fillable = [
         'name',
         'email',
+        'phone',
         'password',
         'role',
         'is_active',
@@ -72,6 +74,7 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_super_admin' => 'boolean',
+            'is_active' => 'boolean',
         ];
     }
 
@@ -92,7 +95,7 @@ class User extends Authenticatable
 
     public function permissions(): array
     {
-        return self::rolePermissions($this->role);
+        return $this->isActive() ? self::rolePermissions($this->role) : [];
     }
 
     public function hasPermission(string $permission): bool
@@ -104,6 +107,10 @@ class User extends Authenticatable
 
     public function availablePanels(): array
     {
+        if (! $this->isActive()) {
+            return [];
+        }
+
         $role = strtolower((string) ($this->role ?? ''));
         $panels = config('roles.'.$role.'.panels', []);
 
@@ -157,5 +164,10 @@ class User extends Authenticatable
     public function isRecepcion(): bool
     {
         return $this->hasRole(self::ROLE_RECEPCION);
+    }
+
+    public function doctorProfile(): HasOne
+    {
+        return $this->hasOne(DoctorProfile::class);
     }
 }

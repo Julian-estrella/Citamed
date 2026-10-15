@@ -47,6 +47,11 @@
                     <button type="submit" class="rounded-2xl bg-slate-100 px-3 py-2 text-sm font-medium text-slate-700">
                         <i class="fa-solid fa-magnifying-glass"></i>
                     </button>
+                    @if (($search ?? '') !== '')
+                        <a href="{{ route('admin.users', request()->except('search')) }}" aria-label="Quitar búsqueda de usuarios" title="Quitar búsqueda" class="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50">
+                            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                        </a>
+                    @endif
                 </form>
             </div>
 
@@ -65,6 +70,7 @@
                                 </a>
                             </th>
                             <th class="px-4 py-3 font-semibold">Correo</th>
+                            <th class="px-4 py-3 font-semibold">Teléfono</th>
                             <th class="px-4 py-3 font-semibold">
                                 <div class="flex items-center justify-between gap-2">
                                     <span>Rol</span>
@@ -116,6 +122,7 @@
                                     </div>
                                 </td>
                                 <td class="px-4 py-3">{{ $userItem->email }}</td>
+                                <td class="px-4 py-3">{{ $userItem->phone ?: 'Sin teléfono' }}</td>
                                 <td class="px-4 py-3">
                                     <span class="rounded-full bg-[#EAF1FF] px-2.5 py-1 text-xs font-semibold text-[#223FAA]">
                                         {{ $roleLabels[$userItem->role] ?? ucfirst($userItem->role) }}
@@ -132,13 +139,19 @@
                                             <i class="fa-solid fa-pen-to-square"></i>
                                         </a>
 
-                                        <form action="{{ route('admin.users.toggle-status', $userItem) }}" method="POST">
-                                            @csrf
-                                            @method('PATCH')
-                                            <button type="submit" title="{{ $userItem->isActive() ? 'Desactivar usuario' : 'Activar usuario' }}" aria-label="{{ $userItem->isActive() ? 'Desactivar' : 'Activar' }} usuario {{ $userItem->name }}" class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700">
-                                                <i class="fa-solid {{ $userItem->isActive() ? 'fa-toggle-on' : 'fa-toggle-off' }}"></i>
+                                        @if ($userItem->isSuperAdmin() && $userItem->isActive())
+                                            <button type="button" disabled title="No puedes desactivar al super administrador" aria-label="No puedes desactivar al super administrador" class="inline-flex h-9 w-9 cursor-not-allowed items-center justify-center rounded-lg border border-slate-200 bg-slate-100 text-slate-400">
+                                                <i class="fa-solid fa-toggle-on"></i>
                                             </button>
-                                        </form>
+                                        @else
+                                            <form action="{{ route('admin.users.toggle-status', $userItem) }}" method="POST">
+                                                @csrf
+                                                @method('PATCH')
+                                                <button type="submit" title="{{ $userItem->isActive() ? 'Desactivar usuario' : 'Activar usuario' }}" aria-label="{{ $userItem->isActive() ? 'Desactivar' : 'Activar' }} usuario {{ $userItem->name }}" class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700">
+                                                    <i class="fa-solid {{ $userItem->isActive() ? 'fa-toggle-on' : 'fa-toggle-off' }}"></i>
+                                                </button>
+                                            </form>
+                                        @endif
 
                                         @if (!$userItem->isSuperAdmin() && auth()->id() !== $userItem->id)
                                             <form action="{{ route('admin.users.destroy', $userItem) }}" method="POST" onsubmit="return confirm('¿Deseas eliminar este usuario?');">
@@ -154,7 +167,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="5" class="px-4 py-8 text-center text-slate-500">No se encontraron usuarios.</td>
+                                <td colspan="6" class="px-4 py-8 text-center text-slate-500">No se encontraron usuarios.</td>
                             </tr>
                         @endforelse
                     </tbody>

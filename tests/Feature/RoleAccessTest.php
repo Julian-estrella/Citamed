@@ -36,6 +36,26 @@ class RoleAccessTest extends TestCase
         $this->assertFalse($recepcionista->canAccessPanel('admin.panel'));
     }
 
+    public function test_inactive_users_have_no_permissions_or_panel_access(): void
+    {
+        $inactiveUser = User::factory()->create([
+            'role' => 'administrador',
+            'is_active' => false,
+        ]);
+
+        $this->assertSame([], $inactiveUser->permissions());
+        $this->assertSame([], $inactiveUser->availablePanels());
+        $this->assertFalse($inactiveUser->hasPermission('visualizar_panel_principal'));
+        $this->assertFalse($inactiveUser->canAccessPanel('admin.panel'));
+
+        $this->actingAs($inactiveUser)
+            ->get(route('admin.panel'))
+            ->assertRedirect(route('login'))
+            ->assertSessionHasErrors([
+                'email' => 'tu usuario esta inactivo contactate con administración',
+            ]);
+    }
+
     public function test_dashboard_redirects_each_role_to_its_own_panel(): void
     {
         $roles = [
@@ -112,12 +132,13 @@ class RoleAccessTest extends TestCase
         $this->actingAs($admin)->get(route('admin.patients'))
             ->assertOk()
             ->assertSee('Pacientes registrados')
+            ->assertDontSee('Nuevo médico')
             ->assertSee('Nuevo paciente')
             ->assertSee('Hoy')
             ->assertSee('Modificar usuario')
-            ->assertSee('bg-[#EFF5EC]');
+            ->assertSee('bg-[#e8ebf4]');
         $this->actingAs($admin)->get(route('admin.patients.create'))->assertOk()->assertSee('Registrar paciente');
-        $this->actingAs($admin)->get(route('admin.doctors'))->assertOk();
+        $this->actingAs($admin)->get(route('admin.doctors'))->assertOk()->assertSee('Nuevo médico');
         $this->actingAs($admin)->get(route('admin.appointments'))->assertOk();
         $this->actingAs($admin)->get(route('admin.agenda'))->assertOk();
 
@@ -126,7 +147,7 @@ class RoleAccessTest extends TestCase
             ->assertSee('Mis pacientes')
             ->assertSee('Hoy')
             ->assertSee('Cerrar sesión')
-            ->assertSee('bg-[#EFF5EC]');
+            ->assertSee('bg-[#e8ebf4]');
         $this->actingAs($doctor)->get(route('medico.appointments'))->assertOk()->assertSee('Mis citas');
         $this->actingAs($doctor)->get(route('medico.agenda'))->assertOk();
         $this->actingAs($doctor)->get(route('medico.availability'))->assertOk();
@@ -136,9 +157,10 @@ class RoleAccessTest extends TestCase
             ->assertOk()
             ->assertSee('Hoy')
             ->assertSee('Modificar usuario')
-            ->assertSee('bg-[#EFF5EC]');
+            ->assertSee('bg-[#e8ebf4]');
         $this->actingAs($reception)->get(route('recepcion.patients.create'))->assertOk()->assertSee('Registrar paciente');
-        $this->actingAs($reception)->get(route('recepcion.doctors'))->assertOk();
+        $this->actingAs($reception)->get(route('recepcion.doctors'))->assertOk()->assertSee('Nuevo médico');
+        $this->get(route('recepcion.doctors.create'))->assertOk()->assertSee('Consultorio 5');
         $this->actingAs($reception)->get(route('recepcion.appointments'))->assertOk();
         $this->actingAs($reception)->get(route('recepcion.agenda'))->assertOk();
         $this->actingAs($reception)->get(route('medico.patients'))->assertForbidden();
@@ -193,28 +215,83 @@ class RoleAccessTest extends TestCase
             'is_active' => false,
         ]);
 
-        $this->actingAs($admin)->get(route('admin.users', [
+        $userListResponse = $this->actingAs($admin)->get(route('admin.users', [
             'search' => 'Encontrado',
             'role' => 'medico',
             'status' => 'active',
         ]))
             ->assertOk()
             ->assertSee('Medico Encontrado')
+            ->assertDontSee('Nuevo médico')
             ->assertDontSee('Medico Excluido')
             ->assertSee('Hoy')
-            ->assertSee('bg-[#F1EDF7]')
+            ->assertSee('bg-[#e8ebf4]')
             ->assertDontSee('Filtrar nombre')
             ->assertDontSee('Filtrar correo')
             ->assertSee('Filtrar por rol')
             ->assertSee('Filtrar por estado')
             ->assertSee('fa-chevron-down')
             ->assertDontSee('<select', false)
-            ->assertDontSee('Limpiar filtros');
+            ->assertDontSee('Limpiar filtros')
+            ->assertSee('aria-label="Quitar búsqueda de usuarios"', false);
 
         $this->get(route('admin.doctors', ['name' => 'Medico Encontrado']))
             ->assertOk()
             ->assertSee('Medico Encontrado')
             ->assertDontSee('Medico Excluido');
+
+        $this->get(route('admin.doctors', ['status' => 'inactive']))
+            ->assertOk()
+            ->assertSee('Medico Excluido')
+            ->assertDontSee('Medico Encontrado');
+
+        User::factory()->create([
+            'name' => 'AAA Doctor',
+            'email' => 'zeta@example.test',
+            'role' => 'medico',
+            'is_active' => true,
+        ]);
+        User::factory()->create([
+            'name' => 'ZZZ Doctor',
+            'email' => 'alpha@example.test',
+            'role' => 'medico',
+            'is_active' => true,
+        ]);
+        User::factory()->create([
+            'name' => 'Medico Correo',
+            'email' => 'unico@example.test',
+            'role' => 'medico',
+            'is_active' => true,
+        ]);
+
+        $doctorSearchResponse = $this->get(route('admin.doctors', [
+            'search' => 'unico@example.test',
+            'sort' => 'email',
+            'direction' => 'asc',
+        ]))
+            ->assertOk()
+            ->assertSee('Medico Correo')
+            ->assertDontSee('Medico Encontrado')
+            ->assertSee('aria-label="Quitar filtro de búsqueda"', false)
+            ->assertSee('name="search"', false)
+            ->assertDontSee('name="email"', false)
+            ->assertDontSee('name="name"', false);
+
+        $this->assertSame(1, substr_count($doctorSearchResponse->getContent(), 'name="search"'));
+
+        $emailSortedDoctors = $this->get(route('admin.doctors', [
+            'sort' => 'email',
+            'direction' => 'asc',
+        ]))->assertOk()->getContent();
+
+        $this->assertTrue(strpos($emailSortedDoctors, 'ZZZ Doctor') < strpos($emailSortedDoctors, 'AAA Doctor'));
+
+        $nameSortedDoctors = $this->get(route('admin.doctors', [
+            'sort' => 'name',
+            'direction' => 'asc',
+        ]))->assertOk()->getContent();
+
+        $this->assertTrue(strpos($nameSortedDoctors, 'AAA Doctor') < strpos($nameSortedDoctors, 'ZZZ Doctor'));
 
         Patient::create([
             'name' => 'Paciente Encontrado',
@@ -248,7 +325,8 @@ class RoleAccessTest extends TestCase
             ->assertDontSee('<select', false)
             ->assertDontSee('Aplicar filtros')
             ->assertDontSee('Limpiar filtros')
-            ->assertSee('Acciones');
+            ->assertSee('Acciones')
+            ->assertSee('aria-label="Quitar búsqueda de pacientes"', false);
 
         $this->assertSame(1, substr_count($patientListResponse->getContent(), 'title="Ver expediente"'));
 
@@ -377,14 +455,14 @@ class RoleAccessTest extends TestCase
         $this->actingAs($reception)->post(route('recepcion.patients.store'), [
             'name' => 'Nuevo Paciente',
             'email' => 'paciente@example.test',
-            'phone' => '5551234567',
+            'phone' => '55512345',
             'birth_date' => '1990-06-15',
             'gender' => 'Femenino',
             'address' => 'Calle Salud 123',
             'emergency_contact_name' => 'Contacto de emergencia',
             'emergency_contact_relationship' => 'Otro',
             'emergency_contact_relationship_other' => 'Hermana',
-            'emergency_contact_phone' => '5556789012',
+            'emergency_contact_phone' => '55567890',
             'blood_type' => 'O+',
             'allergies_conditions' => 'Alergia a la penicilina',
         ])->assertRedirect(route('recepcion.patients'));
@@ -395,7 +473,7 @@ class RoleAccessTest extends TestCase
         $this->assertSame('Calle Salud 123', $patient->address);
         $this->assertSame('Contacto de emergencia', $patient->emergency_contact_name);
         $this->assertSame('Hermana', $patient->emergency_contact_relationship);
-        $this->assertSame('5556789012', $patient->emergency_contact_phone);
+        $this->assertSame('55567890', $patient->emergency_contact_phone);
         $this->assertSame('O+', $patient->blood_type);
         $this->assertSame('Alergia a la penicilina', $patient->allergies_conditions);
         $this->assertSame($patient->birth_date->age, $patient->age);
@@ -446,10 +524,10 @@ class RoleAccessTest extends TestCase
         $validData = [
             'name' => 'Paciente de Validación',
             'email' => 'validacion@example.test',
-            'phone' => '5551234567',
+            'phone' => '55512345',
             'birth_date' => '1990-06-15',
             'gender' => 'Femenino',
-            'emergency_contact_phone' => '5556789012',
+            'emergency_contact_phone' => '55567890',
         ];
 
         $this->actingAs($reception)->post(route('recepcion.patients.store'), array_merge($validData, [
@@ -479,6 +557,64 @@ class RoleAccessTest extends TestCase
         ]))->assertSessionHasErrors('phone');
 
         $this->assertDatabaseCount('patients', 1);
+    }
+
+    public function test_contact_phones_are_limited_to_eight_digits_and_unique_across_records(): void
+    {
+        $admin = User::factory()->create(['role' => 'administrador']);
+        $reception = User::factory()->create(['role' => 'recepcion']);
+        User::factory()->create(['phone' => '55511122']);
+        Patient::create(['name' => 'Paciente con teléfono', 'phone' => '55522233']);
+        $doctor = User::factory()->create(['role' => 'medico']);
+        $doctor->doctorProfile()->create([
+            'professional_title' => 'Dr.',
+            'license_number' => 'CED-30001',
+            'specialty' => 'Medicina general',
+            'phone' => '55533344',
+            'appointment_duration' => 30,
+            'office' => 'Consultorio 1',
+        ]);
+
+        $userData = [
+            'name' => 'Nuevo usuario',
+            'email' => 'nuevo@example.test',
+            'password' => 'Password1!',
+            'password_confirmation' => 'Password1!',
+            'role' => 'recepcion',
+            'is_active' => '1',
+        ];
+        $this->actingAs($admin)->post(route('admin.users.store'), $userData + ['phone' => '55511122'])
+            ->assertSessionHasErrors('phone');
+        $this->post(route('admin.users.store'), $userData + ['phone' => '123456789'])
+            ->assertSessionHasErrors('phone');
+
+        $patientData = [
+            'name' => 'Paciente nuevo',
+            'birth_date' => '1990-06-15',
+            'gender' => 'Femenino',
+        ];
+        $this->actingAs($reception)->post(route('recepcion.patients.store'), $patientData + ['phone' => '55511122'])
+            ->assertSessionHasErrors('phone');
+        $this->post(route('recepcion.patients.store'), $patientData + ['phone' => '123456789'])
+            ->assertSessionHasErrors('phone');
+
+        $doctorData = [
+            'name' => 'Doctora nueva',
+            'email' => 'doctora.nueva@example.test',
+            'password' => 'Password1!',
+            'password_confirmation' => 'Password1!',
+            'professional_title' => 'Dra.',
+            'license_number' => 'CED-30002',
+            'specialty' => 'Medicina general',
+            'appointment_duration' => 30,
+            'office' => 'Consultorio 2',
+            'is_active' => '1',
+            'shifts' => [['days' => ['1'], 'session' => 'matutino']],
+        ];
+        $this->actingAs($admin)->post(route('admin.doctors.store'), $doctorData + ['phone' => '55522233'])
+            ->assertSessionHasErrors('phone');
+        $this->post(route('admin.doctors.store'), $doctorData + ['phone' => '123456789'])
+            ->assertSessionHasErrors('phone');
     }
 
     public function test_duplicate_user_and_patient_identity_fields_are_rejected(): void
@@ -516,14 +652,14 @@ class RoleAccessTest extends TestCase
         $existingPatient = Patient::create([
             'name' => 'Paciente Duplicado',
             'email' => 'paciente.duplicado@example.test',
-            'phone' => '5552223333',
+            'phone' => '55522233',
             'birth_date' => '1990-06-15',
             'gender' => 'Femenino',
         ]);
         $newPatientData = [
             'name' => 'Paciente Nuevo',
             'email' => 'paciente.nuevo@example.test',
-            'phone' => '5554446666',
+            'phone' => '55544466',
             'birth_date' => '1990-06-15',
             'gender' => 'Masculino',
         ];
@@ -547,5 +683,220 @@ class RoleAccessTest extends TestCase
             'birth_date' => $existingPatient->birth_date->toDateString(),
             'gender' => $existingPatient->gender,
         ])->assertRedirect(route('recepcion.patients'));
+    }
+
+    public function test_new_doctor_accounts_redirect_to_professional_profile_setup(): void
+    {
+        $admin = User::factory()->create(['role' => 'administrador']);
+        $payload = [
+            'name' => 'Doctora Nueva',
+            'email' => 'doctora.nueva@example.test',
+            'password' => 'Password1!',
+            'password_confirmation' => 'Password1!',
+            'role' => 'medico',
+            'is_active' => '1',
+        ];
+
+        $response = $this->actingAs($admin)->post(route('admin.users.store'), $payload);
+        $doctor = User::where('email', $payload['email'])->firstOrFail();
+
+        $response->assertRedirect(route('admin.doctors.edit', $doctor));
+        $this->assertDatabaseHas('users', ['id' => $doctor->id, 'role' => 'medico']);
+
+        $this->get(route('admin.doctors.edit', $doctor))
+            ->assertOk()
+            ->assertSee('Completar registro médico')
+            ->assertSee('Cédula profesional')
+            ->assertSee('Días y turnos de atención');
+    }
+
+    public function test_doctor_profile_validates_identity_fields_phone_and_office_schedule_conflicts(): void
+    {
+        $admin = User::factory()->create(['role' => 'administrador']);
+        $firstDoctor = User::factory()->create(['role' => 'medico']);
+        $secondDoctor = User::factory()->create(['role' => 'medico']);
+        $profileData = [
+            'professional_title' => 'Dra.',
+            'license_number' => 'CED-10001',
+            'specialty' => 'Medicina general',
+            'phone' => '12345678',
+            'appointment_duration' => '30',
+            'office' => 'Consultorio 1',
+            'is_active' => '1',
+            'shifts' => [['days' => ['1'], 'session' => 'matutino']],
+        ];
+
+        $this->actingAs($admin)->put(route('admin.doctors.update', $firstDoctor), $profileData)
+            ->assertRedirect(route('admin.doctors'));
+
+        $this->put(route('admin.doctors.update', $secondDoctor), array_merge($profileData, [
+            'license_number' => 'CED-10002',
+            'phone' => '87654321',
+            'shifts' => [['days' => ['1'], 'session' => 'matutino']],
+        ]))->assertSessionHasErrors('shifts.0.days');
+
+        $this->put(route('admin.doctors.update', $secondDoctor), array_merge($profileData, [
+            'license_number' => 'CED-10002',
+            'phone' => '12345678',
+            'office' => 'Consultorio 2',
+        ]))->assertSessionHasErrors('phone');
+
+        $this->put(route('admin.doctors.update', $secondDoctor), array_merge($profileData, [
+            'license_number' => 'CED-10001',
+            'phone' => '87654321',
+            'office' => 'Consultorio 2',
+        ]))->assertSessionHasErrors('license_number');
+
+        $this->put(route('admin.doctors.update', $secondDoctor), array_merge($profileData, [
+            'license_number' => 'CED-10002',
+            'phone' => '123456789',
+            'office' => 'Consultorio 2',
+        ]))->assertSessionHasErrors('phone');
+
+        $this->put(route('admin.doctors.update', $secondDoctor), array_merge($profileData, [
+            'license_number' => 'CED-10002',
+            'phone' => '1234',
+            'office' => 'Consultorio 2',
+        ]))->assertRedirect(route('admin.doctors'));
+
+        $this->assertDatabaseHas('doctor_profiles', [
+            'user_id' => $secondDoctor->id,
+            'phone' => '1234',
+        ]);
+
+        $this->get(route('admin.doctors', [
+            'specialty' => 'Medicina general',
+            'office' => 'Consultorio 2',
+        ]))
+            ->assertOk()
+            ->assertSee($secondDoctor->name)
+            ->assertDontSee($firstDoctor->name);
+    }
+
+    public function test_admin_and_reception_can_register_doctors_with_fixed_offices_and_shifts(): void
+    {
+        $admin = User::factory()->create(['role' => 'administrador']);
+        $reception = User::factory()->create(['role' => 'recepcion']);
+        $doctorData = [
+            'name' => 'Doctora Consultorio Uno',
+            'email' => 'doctora.uno@example.test',
+            'password' => 'Password1!',
+            'password_confirmation' => 'Password1!',
+            'professional_title' => 'Dra.',
+            'license_number' => 'CED-20001',
+            'specialty' => 'Medicina general',
+            'phone' => '76543210',
+            'appointment_duration' => '30',
+            'office' => 'Consultorio 1',
+            'is_active' => '1',
+            'shifts' => [['days' => ['1'], 'session' => 'matutino']],
+        ];
+
+        $this->actingAs($admin)->post(route('admin.doctors.store'), $doctorData)
+            ->assertRedirect(route('admin.doctors'));
+
+        $firstDoctor = User::where('email', $doctorData['email'])->firstOrFail();
+        $this->assertDatabaseHas('doctor_schedules', [
+            'doctor_profile_id' => $firstDoctor->doctorProfile->id,
+            'day_of_week' => 1,
+            'start_time' => '07:00',
+            'end_time' => '14:00',
+        ]);
+
+        $receptionDoctorData = array_merge($doctorData, [
+            'name' => 'Doctor Recepción',
+            'email' => 'doctor.recepcion@example.test',
+            'license_number' => 'CED-20002',
+            'phone' => '87654321',
+        ]);
+
+        $this->actingAs($reception)->post(route('recepcion.doctors.store'), $receptionDoctorData)
+            ->assertSessionHasErrors('shifts.0.days');
+
+        $receptionDoctorData['shifts'] = [['days' => ['1'], 'session' => 'vespertino']];
+        $this->post(route('recepcion.doctors.store'), $receptionDoctorData)
+            ->assertRedirect(route('recepcion.doctors'));
+
+        $secondDoctor = User::where('email', $receptionDoctorData['email'])->firstOrFail();
+        $this->get(route('recepcion.doctors.edit', $secondDoctor))
+            ->assertOk()
+            ->assertSee('Vespertino');
+    }
+
+    public function test_consultation_rooms_are_filterable_numbered_and_show_weekly_availability(): void
+    {
+        $admin = User::factory()->create(['role' => 'administrador']);
+
+        $this->actingAs($admin)->get(route('admin.consultorios'))
+            ->assertOk()
+            ->assertSee('Consultorio 1')
+            ->assertSee('Especialidad')
+            ->assertSee('Ver agenda');
+
+        $room = \App\Models\ConsultationRoom::query()->where('room_number', 1)->firstOrFail();
+        $this->get(route('admin.consultorios.availability', $room))
+            ->assertOk()
+            ->assertSee('Lunes')
+            ->assertSee('Sin médicos asignados');
+
+        $this->post(route('admin.consultorios.store'), ['specialty' => 'Radiología'])
+            ->assertRedirect(route('admin.consultorios'));
+        $this->assertDatabaseHas('consultation_rooms', [
+            'room_number' => 6,
+            'specialty' => 'Radiología',
+        ]);
+
+        $this->get(route('admin.consultorios', ['specialty' => 'Radiología']))
+            ->assertOk()
+            ->assertSee('Consultorio 6')
+            ->assertDontSee('Consultorio 1');
+    }
+
+    public function test_agenda_calendar_shows_period_views_availability_colors_and_day_slots(): void
+    {
+        $admin = User::factory()->create(['role' => 'administrador']);
+        $doctor = User::factory()->create(['role' => 'medico', 'name' => 'Doctora Calendario']);
+        $profile = $doctor->doctorProfile()->create([
+            'professional_title' => 'Dra.',
+            'license_number' => 'CED-CAL-1',
+            'specialty' => 'Medicina general',
+            'phone' => '85858585',
+            'appointment_duration' => 30,
+            'office' => 'Consultorio 1',
+        ]);
+        $weekday = today()->dayOfWeekIso;
+        $nextWeekday = today()->addDay()->dayOfWeekIso;
+        $profile->shifts()->createMany([
+            ['day_of_week' => $weekday, 'start_time' => '07:00', 'end_time' => '14:00'],
+            ['day_of_week' => $nextWeekday, 'start_time' => '07:00', 'end_time' => '14:00'],
+        ]);
+        $patient = Patient::create(['name' => 'Paciente Agenda', 'is_active' => true]);
+        for ($slot = 0; $slot < 10; $slot++) {
+            Appointment::create([
+                'patient_id' => $patient->id,
+                'doctor_id' => $doctor->id,
+                'scheduled_at' => today()->setTime(7, 0)->addMinutes($slot * 30),
+                'reason' => 'Consulta de agenda',
+                'status' => Appointment::STATUS_SCHEDULED,
+            ]);
+        }
+
+        $anchor = today()->toDateString();
+        $this->actingAs($admin)->get(route('admin.agenda', ['view' => 'month', 'anchor' => $anchor]))
+            ->assertOk()
+            ->assertSee('Disponibilidad médica')
+            ->assertSee('border-amber-200 bg-amber-50')
+            ->assertSee('border-emerald-200 bg-emerald-50')
+            ->assertSee('border-red-200 bg-red-50');
+        $this->get(route('admin.agenda', ['view' => 'week', 'anchor' => $anchor]))->assertOk()->assertSee('Semana');
+        $this->get(route('admin.agenda', ['view' => 'year', 'anchor' => $anchor]))->assertOk()->assertSee('Año');
+
+        $this->get(route('admin.agenda.day', $anchor))
+            ->assertOk()
+            ->assertSee('Doctora Calendario')
+            ->assertSee('Paciente Agenda')
+            ->assertSee('07:00–07:30 · Ocupado')
+            ->assertSee('07:30–08:00')
+            ->assertSee('Disponible');
     }
 }
