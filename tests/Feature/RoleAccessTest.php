@@ -539,7 +539,7 @@ class RoleAccessTest extends TestCase
         $this->assertDatabaseCount('patients', 1);
     }
 
-    public function test_contact_phones_are_limited_to_eight_digits_and_unique_across_records(): void
+    public function test_patient_and_doctor_contact_phones_are_limited_to_eight_digits_and_unique_across_records(): void
     {
         $admin = User::factory()->create(['role' => 'administrador']);
         $reception = User::factory()->create(['role' => 'recepcion']);
@@ -563,11 +563,6 @@ class RoleAccessTest extends TestCase
             'role' => 'recepcion',
             'is_active' => '1',
         ];
-        $this->actingAs($admin)->post(route('admin.users.store'), $userData + ['phone' => '55511122'])
-            ->assertSessionHasErrors('phone');
-        $this->post(route('admin.users.store'), $userData + ['phone' => '123456789'])
-            ->assertSessionHasErrors('phone');
-
         $patientData = [
             'name' => 'Paciente nuevo',
             'birth_date' => '1990-06-15',
@@ -595,6 +590,55 @@ class RoleAccessTest extends TestCase
             ->assertSessionHasErrors('phone');
         $this->post(route('admin.doctors.store'), $doctorData + ['phone' => '123456789'])
             ->assertSessionHasErrors('phone');
+    }
+
+    public function test_user_management_does_not_collect_display_or_update_phone_numbers(): void
+    {
+        $admin = User::factory()->create(['role' => 'administrador']);
+        $existingUser = User::factory()->create([
+            'name' => 'Usuario existente',
+            'email' => 'usuario.existente@example.test',
+            'phone' => '55511122',
+        ]);
+
+        $this->actingAs($admin)->get(route('admin.users.create'))
+            ->assertOk()
+            ->assertDontSee('name="phone"', false);
+        $this->get(route('admin.users.edit', $existingUser))
+            ->assertOk()
+            ->assertDontSee('name="phone"', false);
+        $this->get(route('admin.users'))
+            ->assertOk()
+            ->assertDontSee('Teléfono')
+            ->assertDontSee('55511122');
+
+        $this->post(route('admin.users.store'), [
+            'name' => 'Usuario nuevo',
+            'email' => 'usuario.nuevo@example.test',
+            'phone' => '55522233',
+            'password' => 'Password1!',
+            'password_confirmation' => 'Password1!',
+            'role' => 'recepcion',
+            'is_active' => '1',
+        ])->assertRedirect(route('admin.users'));
+
+        $this->assertDatabaseHas('users', [
+            'email' => 'usuario.nuevo@example.test',
+            'phone' => null,
+        ]);
+
+        $this->put(route('admin.users.update', $existingUser), [
+            'name' => $existingUser->name,
+            'email' => $existingUser->email,
+            'phone' => '55533344',
+            'role' => $existingUser->role,
+            'is_active' => '1',
+        ])->assertRedirect(route('admin.users'));
+
+        $this->assertDatabaseHas('users', [
+            'id' => $existingUser->id,
+            'phone' => '55511122',
+        ]);
     }
 
     public function test_duplicate_user_and_patient_identity_fields_are_rejected(): void
@@ -690,6 +734,42 @@ class RoleAccessTest extends TestCase
             ->assertSee('Días y turnos de atención');
     }
 
+    public function test_new_users_can_have_multiple_roles_and_doctors_still_redirect_to_profile_setup(): void
+    {
+        $admin = User::factory()->create(['role' => 'administrador']);
+        $payload = [
+            'name' => 'Usuario Médico Administrador',
+            'email' => 'usuario.medico@example.test',
+            'password' => 'Password1!',
+            'password_confirmation' => 'Password1!',
+            'roles' => ['administrador', 'medico'],
+            'is_active' => '1',
+        ];
+
+        $response = $this->actingAs($admin)->post(route('admin.users.store'), $payload);
+        $user = User::where('email', $payload['email'])->firstOrFail();
+
+        $response->assertRedirect(route('admin.doctors.edit', $user));
+        $this->assertSame(['administrador', 'medico'], $user->assignedRoles());
+        $this->assertTrue($user->isAdmin());
+        $this->assertTrue($user->isMedico());
+        $this->assertTrue($user->hasPermission('gestionar_usuarios'));
+        $this->assertTrue($user->hasPermission('consultar_citas'));
+
+        $this->put(route('admin.users.update', $user), [
+            'name' => $user->name,
+            'email' => $user->email,
+            'roles' => ['medico', 'recepcion'],
+            'is_active' => '1',
+        ])->assertRedirect(route('admin.users'));
+
+        $user->refresh();
+        $this->assertSame(['medico', 'recepcion'], $user->assignedRoles());
+        $this->assertTrue($user->isMedico());
+        $this->assertTrue($user->isRecepcion());
+        $this->assertFalse($user->isAdmin());
+    }
+
     public function test_doctor_profile_validates_identity_fields_phone_and_office_schedule_conflicts(): void
     {
         $admin = User::factory()->create(['role' => 'administrador']);
@@ -725,7 +805,12 @@ class RoleAccessTest extends TestCase
             'license_number' => 'CED-10001',
             'phone' => '87654321',
             'office' => 'Consultorio 2',
-        ]))->assertSessionHasErrors('license_number');
+        ]))->assertRedirect(route('admin.doctors'));
+
+        $this->assertDatabaseHas('doctor_profiles', [
+            'user_id' => $secondDoctor->id,
+            'license_number' => 'MG000002',
+        ]);
 
         $this->put(route('admin.doctors.update', $secondDoctor), array_merge($profileData, [
             'license_number' => 'CED-10002',
@@ -776,6 +861,10 @@ class RoleAccessTest extends TestCase
             ->assertRedirect(route('admin.doctors'));
 
         $firstDoctor = User::where('email', $doctorData['email'])->firstOrFail();
+        $this->assertDatabaseHas('doctor_profiles', [
+            'user_id' => $firstDoctor->id,
+            'license_number' => 'MG000001',
+        ]);
         $this->assertDatabaseHas('doctor_schedules', [
             'doctor_profile_id' => $firstDoctor->doctorProfile->id,
             'day_of_week' => 1,
@@ -798,6 +887,10 @@ class RoleAccessTest extends TestCase
             ->assertRedirect(route('recepcion.doctors'));
 
         $secondDoctor = User::where('email', $receptionDoctorData['email'])->firstOrFail();
+        $this->assertDatabaseHas('doctor_profiles', [
+            'user_id' => $secondDoctor->id,
+            'license_number' => 'MG000002',
+        ]);
         $this->get(route('recepcion.doctors.edit', $secondDoctor))
             ->assertOk()
             ->assertSee('Vespertino');

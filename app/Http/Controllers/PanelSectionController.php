@@ -13,6 +13,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 
@@ -263,7 +264,12 @@ class PanelSectionController extends Controller
                 'is_active' => (bool) $validated['is_active'],
             ]);
 
-            $profile = $doctor->doctorProfile()->create($this->doctorProfileData($validated));
+            $profile = $doctor->doctorProfile()->create(array_merge(
+                $this->doctorProfileData($validated),
+                ['license_number' => $this->pendingDoctorLicense()]
+            ));
+            $profile->license_number = $this->doctorLicenseNumber($validated['specialty'], $profile->id);
+            $profile->save();
             $profile->shifts()->createMany($this->doctorScheduleData($validated['shifts']));
 
             return $doctor;
@@ -301,10 +307,14 @@ class PanelSectionController extends Controller
         $validated = $validator->validate();
 
         DB::transaction(function () use ($doctor, $validated) {
-            $profile = DoctorProfile::updateOrCreate(
-                ['user_id' => $doctor->id],
-                $this->doctorProfileData($validated)
-            );
+            $profile = DoctorProfile::firstOrNew(['user_id' => $doctor->id]);
+            $profile->fill($this->doctorProfileData($validated));
+            if (! $profile->exists) {
+                $profile->license_number = $this->pendingDoctorLicense();
+                $profile->save();
+            }
+            $profile->license_number = $this->doctorLicenseNumber($validated['specialty'], $profile->id);
+            $profile->save();
 
             $profile->shifts()->delete();
             $profile->shifts()->createMany($this->doctorScheduleData($validated['shifts']));
@@ -800,14 +810,8 @@ class PanelSectionController extends Controller
     private function doctorProfileRules(?User $doctor = null, ?string $specialty = null): array
     {
         $profile = $doctor?->doctorProfile;
-        $uniqueLicense = Rule::unique('doctor_profiles', 'license_number');
-        if ($profile) {
-            $uniqueLicense->ignore($profile->id);
-        }
-
         return [
             'professional_title' => ['required', Rule::in(['Dr.', 'Dra.'])],
-            'license_number' => ['required', 'string', 'max:30', $uniqueLicense],
             'specialty' => ['required', Rule::in(config('clinic.specialties'))],
             'phone' => ['required', 'regex:/\A[0-9]{1,8}\z/', new UniqueClinicPhone('doctor_profiles', $profile?->id)],
             'appointment_duration' => ['required', 'integer', Rule::in([20, 30, 45])],
@@ -890,12 +894,30 @@ class PanelSectionController extends Controller
     {
         return [
             'professional_title' => $validated['professional_title'],
-            'license_number' => trim($validated['license_number']),
             'specialty' => trim($validated['specialty']),
             'phone' => $validated['phone'],
             'appointment_duration' => $validated['appointment_duration'],
             'office' => $validated['office'],
         ];
+    }
+
+    private function doctorLicenseNumber(string $specialty, int $profileId): string
+    {
+        if ($profileId > 999999) {
+            throw new \RuntimeException('Se alcanzó el límite de cédulas profesionales generadas.');
+        }
+
+        $words = preg_split('/\s+/', Str::ascii(trim($specialty)), -1, PREG_SPLIT_NO_EMPTY);
+        $prefix = count($words) > 1
+            ? implode('', array_map(fn (string $word) => $word[0], array_slice($words, 0, 2)))
+            : substr($words[0] ?? '', 0, 2);
+
+        return strtoupper($prefix).str_pad((string) $profileId, 6, '0', STR_PAD_LEFT);
+    }
+
+    private function pendingDoctorLicense(): string
+    {
+        return 'PENDING-'.Str::random(20);
     }
 
     private function doctorScheduleData(array $shifts): array

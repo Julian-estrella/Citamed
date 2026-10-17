@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
-use App\Rules\UniqueClinicPhone;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rule;
@@ -42,7 +41,10 @@ class UserManagementController extends Controller
         }
 
         if (! empty($filters['role'])) {
-            $query->where('role', $filters['role']);
+            $query->where(function ($roleQuery) use ($filters) {
+                $roleQuery->where('role', $filters['role'])
+                    ->orWhereJsonContains('roles', $filters['role']);
+            });
         }
 
         if (! empty($filters['status'])) {
@@ -67,26 +69,30 @@ class UserManagementController extends Controller
 
     public function store(Request $request)
     {
+        $request->merge([
+            'roles' => $request->input('roles', array_filter([$request->input('role')])),
+        ]);
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255', Rule::unique('users', 'name')],
             'email' => ['required', 'string', 'email', 'max:255', Rule::unique('users', 'email')],
-            'phone' => ['nullable', 'regex:/\A[0-9]{1,8}\z/', new UniqueClinicPhone('users')],
             'password' => [
                 'required',
                 'string',
                 Password::min(8)->max(12)->mixedCase()->numbers()->symbols(),
                 'confirmed',
             ],
-            'role' => ['required', 'in:administrador,medico,recepcion'],
+            'roles' => ['required', 'array', 'min:1'],
+            'roles.*' => ['required', 'string', 'distinct', 'in:administrador,medico,recepcion'],
             'is_active' => ['required', 'boolean'],
         ]);
 
         User::create([
             'name' => $validated['name'],
             'email' => $validated['email'],
-            'phone' => $validated['phone'] ?? null,
             'password' => Hash::make($validated['password']),
-            'role' => $validated['role'],
+            'role' => $validated['roles'][0],
+            'roles' => $validated['roles'],
             'is_active' => (bool) ($validated['is_active'] ?? true),
         ]);
 
@@ -114,17 +120,21 @@ class UserManagementController extends Controller
 
     public function update(Request $request, User $user)
     {
+        $request->merge([
+            'roles' => $request->input('roles', array_filter([$request->input('role')])),
+        ]);
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255', Rule::unique('users', 'name')->ignore($user->id)],
             'email' => ['required', 'string', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
-            'phone' => ['nullable', 'regex:/\A[0-9]{1,8}\z/', new UniqueClinicPhone('users', $user->id)],
             'password' => [
                 'nullable',
                 'string',
                 Password::min(8)->max(12)->mixedCase()->numbers()->symbols(),
                 'confirmed',
             ],
-            'role' => ['required', 'in:administrador,medico,recepcion'],
+            'roles' => ['required', 'array', 'min:1'],
+            'roles.*' => ['required', 'string', 'distinct', 'in:administrador,medico,recepcion'],
             'is_active' => ['required', 'boolean'],
         ]);
 
@@ -134,8 +144,8 @@ class UserManagementController extends Controller
 
         $user->name = $validated['name'];
         $user->email = $validated['email'];
-        $user->phone = $validated['phone'] ?? null;
-        $user->role = $validated['role'];
+        $user->role = $validated['roles'][0];
+        $user->roles = $validated['roles'];
         $user->is_active = (bool) $validated['is_active'];
 
         if (! empty($validated['password'])) {

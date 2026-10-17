@@ -70,7 +70,6 @@
                                 </a>
                             </th>
                             <th class="px-4 py-3 font-semibold">Correo</th>
-                            <th class="px-4 py-3 font-semibold">Teléfono</th>
                             <th class="px-4 py-3 font-semibold">
                                 <div class="flex items-center justify-between gap-2">
                                     <span>Rol</span>
@@ -122,11 +121,8 @@
                                     </div>
                                 </td>
                                 <td class="px-4 py-3">{{ $userItem->email }}</td>
-                                <td class="px-4 py-3">{{ $userItem->phone ?: 'Sin teléfono' }}</td>
                                 <td class="px-4 py-3">
-                                    <span class="rounded-full bg-[#EAF1FF] px-2.5 py-1 text-xs font-semibold text-[#223FAA]">
-                                        {{ $roleLabels[$userItem->role] ?? ucfirst($userItem->role) }}
-                                    </span>
+                                    {{ collect($userItem->assignedRoles())->map(fn ($role) => $roleLabels[$role] ?? ucfirst($role))->join(', ') }}
                                 </td>
                                 <td class="px-4 py-3">
                                     <span class="rounded-full {{ $userItem->isActive() ? 'bg-[#EAFBF7] text-[#0f766e]' : 'bg-[#FDECEC] text-[#b42318]' }} px-2.5 py-1 text-xs font-semibold">
@@ -167,7 +163,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="6" class="px-4 py-8 text-center text-slate-500">No se encontraron usuarios.</td>
+                                <td colspan="5" class="px-4 py-8 text-center text-slate-500">No se encontraron usuarios.</td>
                             </tr>
                         @endforelse
                     </tbody>

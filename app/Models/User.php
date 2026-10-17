@@ -39,6 +39,7 @@ class User extends Authenticatable
         'phone',
         'password',
         'role',
+        'roles',
         'is_active',
     ];
 
@@ -75,15 +76,27 @@ class User extends Authenticatable
             'password' => 'hashed',
             'is_super_admin' => 'boolean',
             'is_active' => 'boolean',
+            'roles' => 'array',
         ];
+    }
+
+    public function assignedRoles(): array
+    {
+        $roles = $this->roles;
+
+        return is_array($roles) && $roles !== []
+            ? array_values(array_unique($roles))
+            : array_filter([(string) ($this->role ?? '')]);
     }
 
     public function hasRole(string $role): bool
     {
         $requestedRole = strtolower(trim($role));
-        $currentRole = strtolower((string) ($this->role ?? ''));
 
-        return $currentRole === $requestedRole;
+        return in_array($requestedRole, array_map(
+            fn (string $assignedRole) => strtolower(trim($assignedRole)),
+            $this->assignedRoles()
+        ), true);
     }
 
     public static function rolePermissions(?string $role): array
@@ -95,7 +108,15 @@ class User extends Authenticatable
 
     public function permissions(): array
     {
-        return $this->isActive() ? self::rolePermissions($this->role) : [];
+        if (! $this->isActive()) {
+            return [];
+        }
+
+        return collect($this->assignedRoles())
+            ->flatMap(fn (string $role) => self::rolePermissions($role))
+            ->unique()
+            ->values()
+            ->all();
     }
 
     public function hasPermission(string $permission): bool
@@ -111,11 +132,10 @@ class User extends Authenticatable
             return [];
         }
 
-        $role = strtolower((string) ($this->role ?? ''));
-        $panels = config('roles.'.$role.'.panels', []);
-
-        return collect($panels)
+        return collect($this->assignedRoles())
+            ->flatMap(fn (string $role) => config('roles.'.strtolower($role).'.panels', []))
             ->filter(fn (array $panel) => ! isset($panel['permission']) || $this->hasPermission($panel['permission']))
+            ->unique(fn (array $panel) => $panel['key'] ?? $panel['route'] ?? '')
             ->values()
             ->all();
     }
@@ -128,7 +148,7 @@ class User extends Authenticatable
 
     public function defaultDashboardRoute(): ?string
     {
-        return match (strtolower((string) ($this->role ?? ''))) {
+        return match (strtolower($this->assignedRoles()[0] ?? '')) {
             self::ROLE_ADMINISTRADOR => 'admin.panel',
             self::ROLE_MEDICO => 'medico.dashboard',
             self::ROLE_RECEPCION => 'recepcion.dashboard',

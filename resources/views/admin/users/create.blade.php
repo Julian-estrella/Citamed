@@ -41,24 +41,23 @@
                     @enderror
                 </div>
 
-                <div class="md:col-span-2">
-                    <label for="phone" class="mb-1 block text-sm font-medium text-slate-700">Teléfono (máximo 8 dígitos)</label>
-                    <input id="phone" type="tel" name="phone" value="{{ old('phone') }}" maxlength="8" inputmode="numeric" pattern="[0-9]{1,8}" autocomplete="tel" class="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-[#223FAA]">
-                    @error('phone')<p class="mt-1 text-xs font-medium text-red-600">{{ $message }}</p>@enderror
-                </div>
-
-                <div>
-                    <label class="mb-1 block text-sm font-medium text-slate-700">Tipo de usuario</label>
-                    <select name="role" class="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-sm focus:border-[#223FAA]" required>
-                        <option value="">Seleccione un rol</option>
+                <fieldset class="md:col-span-2">
+                    <legend class="mb-2 block text-sm font-medium text-slate-700">Roles</legend>
+                    <div class="flex flex-wrap gap-x-6 gap-y-2">
                         @foreach ($roleLabels as $value => $label)
-                            <option value="{{ $value }}" {{ old('role') === $value ? 'selected' : '' }}>{{ $label }}</option>
+                            <label class="inline-flex items-center gap-2 text-sm text-slate-700">
+                                <input type="checkbox" name="roles[]" value="{{ $value }}" {{ in_array($value, old('roles', []), true) ? 'checked' : '' }} class="rounded border-slate-300 text-[#223FAA] focus:ring-[#223FAA]">
+                                {{ $label }}
+                            </label>
                         @endforeach
-                    </select>
-                    @error('role')
+                    </div>
+                    @error('roles')
                         <p class="mt-1 text-xs font-medium text-red-600">{{ $message }}</p>
                     @enderror
-                </div>
+                    @error('roles.*')
+                        <p class="mt-1 text-xs font-medium text-red-600">{{ $message }}</p>
+                    @enderror
+                </fieldset>
 
                 <div>
                     <label class="mb-1 block text-sm font-medium text-slate-700">Estado</label>
