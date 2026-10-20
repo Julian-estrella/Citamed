@@ -5,14 +5,14 @@
         $user = Auth::user();
         $userName = $user?->name ?? 'Recepción';
         $quickActions = [
-            ['permission' => 'registrar_pacientes', 'label' => 'Registrar paciente', 'description' => 'Crear un registro de paciente', 'icon' => 'fa-solid fa-user-plus', 'route' => route('recepcion.patients')],
+            ['permission' => 'registrar_pacientes', 'label' => 'Registrar paciente', 'description' => 'Crear un registro de paciente', 'icon' => 'fa-solid fa-user-plus', 'route' => route('recepcion.patients.create')],
             ['permission' => 'consultar_pacientes', 'label' => 'Consultar pacientes', 'description' => 'Buscar información de pacientes', 'icon' => 'fa-solid fa-magnifying-glass', 'route' => route('recepcion.patients')],
             ['permission' => 'modificar_pacientes', 'label' => 'Modificar pacientes', 'description' => 'Actualizar datos de pacientes', 'icon' => 'fa-solid fa-user-pen', 'route' => route('recepcion.patients')],
             ['permission' => 'gestionar_citas', 'label' => 'Gestionar citas', 'description' => 'Administrar citas de pacientes', 'icon' => 'fa-solid fa-calendar-check', 'route' => route('recepcion.appointments')],
-            ['permission' => 'programar_citas', 'label' => 'Programar cita', 'description' => 'Agendar una nueva cita', 'icon' => 'fa-solid fa-calendar-plus', 'route' => route('recepcion.appointments')],
+            ['permission' => 'programar_citas', 'label' => 'Programar cita', 'description' => 'Agendar una nueva cita', 'icon' => 'fa-solid fa-calendar-plus', 'route' => route('recepcion.appointments.create')],
             ['permission' => 'modificar_citas', 'label' => 'Modificar citas', 'description' => 'Actualizar una cita programada', 'icon' => 'fa-solid fa-calendar-check', 'route' => route('recepcion.appointments')],
             ['permission' => 'cancelar_citas', 'label' => 'Cancelar cita', 'description' => 'Cancelar una cita programada', 'icon' => 'fa-solid fa-calendar-xmark', 'route' => route('recepcion.appointments')],
-            ['permission' => 'consultar_horarios_disponibles_medicos', 'label' => 'Consultar horarios', 'description' => 'Ver disponibilidad de médicos', 'icon' => 'fa-solid fa-clock', 'route' => route('recepcion.doctors')],
+            ['permission' => 'consultar_horarios_disponibles_medicos', 'label' => 'Consultar horarios', 'description' => 'Ver disponibilidad diaria, semanal y mensual de médicos', 'icon' => 'fa-solid fa-clock', 'route' => route('recepcion.agenda')],
         ];
         $availableActions = collect($quickActions)
             ->filter(fn (array $action) => $user?->hasPermission($action['permission']) ?? false);
@@ -60,12 +60,17 @@
                     </div>
                     <div class="space-y-3">
                         @forelse ($todayAppointments as $appointment)
-                            <div class="flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-3">
+                            <div class="flex items-center justify-between gap-4 rounded-xl border p-3 {{ $appointment->status === \App\Models\Appointment::STATUS_CANCELLED ? 'border-red-200 bg-red-50' : 'border-slate-200 bg-white' }}">
                                 <div>
-                                    <p class="font-semibold text-[#191346]">{{ $appointment->patient->name }}</p>
-                                    <p class="text-sm text-slate-500">{{ $appointment->doctor?->name ?? 'Médico no disponible' }}</p>
+                                    <p class="font-semibold {{ $appointment->status === \App\Models\Appointment::STATUS_CANCELLED ? 'text-red-800' : 'text-[#191346]' }}">{{ $appointment->patient->name }}</p>
+                                    <p class="text-sm {{ $appointment->status === \App\Models\Appointment::STATUS_CANCELLED ? 'text-red-700' : 'text-slate-500' }}">{{ $appointment->doctor?->name ?? 'Médico no disponible' }}</p>
                                 </div>
-                                <span class="rounded-full bg-[#EAFBF7] px-2.5 py-1 text-xs font-semibold text-[#0f766e]">{{ $appointment->scheduled_at->format('H:i') }}</span>
+                                <div class="text-right">
+                                    <span class="rounded-full px-2.5 py-1 text-xs font-semibold {{ $appointment->status === \App\Models\Appointment::STATUS_CANCELLED ? 'bg-red-100 text-red-700' : 'bg-[#EAFBF7] text-[#0f766e]' }}">{{ $appointment->scheduled_at->format('H:i') }}</span>
+                                    @if ($appointment->status === \App\Models\Appointment::STATUS_CANCELLED)
+                                        <span class="mt-1 block text-[10px] font-semibold text-red-700">Cancelada</span>
+                                    @endif
+                                </div>
                             </div>
                         @empty
                             <p class="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">No hay citas activas para hoy.</p>
@@ -102,7 +107,7 @@
         </section>
 
         @if ($user?->hasPermission('consultar_horarios_disponibles_medicos'))
-            <a href="{{ route('recepcion.doctors') }}" class="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-[#191346] p-5 text-white">
+            <a href="{{ route('recepcion.agenda') }}" class="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-[#191346] p-5 text-white">
                 <div>
                     <h3 class="font-bold">Horarios de médicos</h3>
                     <p class="mt-1 text-sm text-slate-300">Consulta disponibilidad para coordinar la atención.</p>

@@ -34,15 +34,15 @@ Route::middleware([
     Route::middleware(['role:administrador', 'permission:visualizar_panel_principal'])->group(function () {
         Route::get('/admin-panel', [DashboardController::class, 'admin'])->name('admin.panel');
 
-        Route::get('/admin/users/dashboard', [UserManagementController::class, 'dashboard'])->name('admin.users.dashboard');
-        Route::get('/admin/users/actions', [UserManagementController::class, 'actions'])->name('admin.users.actions');
-        Route::get('/admin/users', [UserManagementController::class, 'index'])->name('admin.users');
-        Route::get('/admin/users/create', [UserManagementController::class, 'create'])->name('admin.users.create');
-        Route::post('/admin/users', [UserManagementController::class, 'store'])->name('admin.users.store');
-        Route::get('/admin/users/{user}/edit', [UserManagementController::class, 'edit'])->name('admin.users.edit');
-        Route::put('/admin/users/{user}', [UserManagementController::class, 'update'])->name('admin.users.update');
-        Route::patch('/admin/users/{user}/toggle-status', [UserManagementController::class, 'toggleStatus'])->name('admin.users.toggle-status');
-        Route::delete('/admin/users/{user}', [UserManagementController::class, 'destroy'])->name('admin.users.destroy');
+        Route::get('/admin/users/dashboard', [UserManagementController::class, 'dashboard'])->middleware('permission:gestionar_usuarios')->name('admin.users.dashboard');
+        Route::get('/admin/users/actions', [UserManagementController::class, 'actions'])->middleware('permission:gestionar_usuarios')->name('admin.users.actions');
+        Route::get('/admin/users', [UserManagementController::class, 'index'])->middleware('permission:gestionar_usuarios')->name('admin.users');
+        Route::get('/admin/users/create', [UserManagementController::class, 'create'])->middleware('permission:gestionar_usuarios')->name('admin.users.create');
+        Route::post('/admin/users', [UserManagementController::class, 'store'])->middleware('permission:gestionar_usuarios')->name('admin.users.store');
+        Route::get('/admin/users/{user}/edit', [UserManagementController::class, 'edit'])->middleware('permission:gestionar_usuarios')->name('admin.users.edit');
+        Route::put('/admin/users/{user}', [UserManagementController::class, 'update'])->middleware('permission:gestionar_usuarios')->name('admin.users.update');
+        Route::patch('/admin/users/{user}/toggle-status', [UserManagementController::class, 'toggleStatus'])->middleware('permission:gestionar_usuarios')->name('admin.users.toggle-status');
+        Route::delete('/admin/users/{user}', [UserManagementController::class, 'destroy'])->middleware('permission:gestionar_usuarios')->name('admin.users.destroy');
 
         Route::get('/admin/pacientes', [PanelSectionController::class, 'patients'])
             ->middleware('permission:gestionar_pacientes')->name('admin.patients');
@@ -127,6 +127,20 @@ Route::middleware([
         ->middleware(['role:medico', 'permission:consultar_pacientes_que_atiende'])->name('medico.patients.show');
     Route::get('/medico/citas', [PanelSectionController::class, 'appointments'])
         ->middleware(['role:medico', 'permission:consultar_citas'])->name('medico.appointments');
+    Route::get('/medico/citas/horarios-disponibles', [PanelSectionController::class, 'appointmentSlots'])
+        ->middleware(['role:medico', 'permission:programar_citas'])->name('medico.appointments.slots');
+    Route::get('/medico/citas/create', [PanelSectionController::class, 'createAppointment'])
+        ->middleware(['role:medico', 'permission:programar_citas'])->name('medico.appointments.create');
+    Route::post('/medico/citas', [PanelSectionController::class, 'storeAppointment'])
+        ->middleware(['role:medico', 'permission:programar_citas'])->name('medico.appointments.store');
+    Route::get('/medico/citas/{appointment}/edit', [PanelSectionController::class, 'editAppointment'])
+        ->middleware(['role:medico', 'permission:modificar_citas'])->name('medico.appointments.edit');
+    Route::put('/medico/citas/{appointment}', [PanelSectionController::class, 'updateAppointment'])
+        ->middleware(['role:medico', 'permission:modificar_citas'])->name('medico.appointments.update');
+    Route::patch('/medico/citas/{appointment}/cancel', [PanelSectionController::class, 'cancelAppointment'])
+        ->middleware(['role:medico', 'permission:cancelar_citas'])->name('medico.appointments.cancel');
+    Route::patch('/medico/citas/{appointment}/confirm', [PanelSectionController::class, 'confirmAppointment'])
+        ->middleware(['role:medico', 'permission:modificar_citas'])->name('medico.appointments.confirm');
     Route::get('/medico/agenda', [PanelSectionController::class, 'agenda'])
         ->middleware(['role:medico', 'permission:gestionar_horario_atencion'])->name('medico.agenda');
     Route::get('/medico/agenda/{date}', [PanelSectionController::class, 'agendaDay'])
@@ -134,6 +148,9 @@ Route::middleware([
         ->middleware(['role:medico', 'permission:gestionar_horario_atencion'])->name('medico.agenda.day');
     Route::get('/medico/disponibilidad', [PanelSectionController::class, 'availability'])
         ->middleware(['role:medico', 'permission:gestionar_disponibilidad'])->name('medico.availability');
+    Route::get('/medico/disponibilidad/{date}', [PanelSectionController::class, 'agendaDay'])
+        ->where('date', '\\d{4}-\\d{2}-\\d{2}')
+        ->middleware(['role:medico', 'permission:gestionar_disponibilidad'])->name('medico.availability.day');
 
     Route::get('/recepcion/pacientes', [PanelSectionController::class, 'patients'])
         ->middleware(['role:recepcion', 'permission:consultar_pacientes'])->name('recepcion.patients');

@@ -5,13 +5,15 @@
         $user = Auth::user();
         $userName = $user?->name ?? 'Administrador';
         $quickActions = [
-            ['permission' => 'gestionar_pacientes', 'label' => 'Consultar pacientes', 'route' => route('admin.patients'), 'icon' => 'fa-solid fa-user-injured'],
-            ['permission' => 'gestionar_citas', 'label' => 'Agendar cita', 'route' => route('admin.appointments'), 'icon' => 'fa-solid fa-calendar-plus'],
-            ['permission' => 'gestionar_medicos', 'label' => 'Ver médicos', 'route' => route('admin.doctors'), 'icon' => 'fa-solid fa-user-doctor'],
+            ['permission' => 'gestionar_pacientes', 'label' => 'Registrar paciente', 'route' => route('admin.patients.create'), 'icon' => 'fa-solid fa-user-plus'],
+            ['permission' => 'gestionar_citas', 'label' => 'Programar cita', 'route' => route('admin.appointments.create'), 'icon' => 'fa-solid fa-calendar-plus'],
+            ['permission' => 'gestionar_medicos', 'label' => 'Registrar médico', 'route' => route('admin.doctors.create'), 'icon' => 'fa-solid fa-user-doctor'],
         ];
         $availableActions = collect($quickActions)
             ->filter(fn (array $action) => $user?->hasPermission($action['permission']) ?? false);
-        $upcomingAppointments = $todayAppointments->take(4);
+        $upcomingAppointments = $todayAppointments
+            ->where('status', '!=', \App\Models\Appointment::STATUS_CANCELLED)
+            ->take(4);
     @endphp
 
     <div class="flex min-h-full w-full flex-col gap-6">
@@ -45,12 +47,17 @@
                 </div>
                 <div class="space-y-3">
                     @forelse ($todayAppointments as $appointment)
-                        <div class="flex items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+                        <div class="flex items-center justify-between gap-4 rounded-2xl border p-3 shadow-sm {{ $appointment->status === \App\Models\Appointment::STATUS_CANCELLED ? 'border-red-200 bg-red-50' : 'border-slate-200 bg-white' }}">
                             <div class="min-w-0">
-                                <p class="truncate font-semibold text-[#191346]">{{ $appointment->patient->name }}</p>
-                                <p class="truncate text-sm text-slate-500">{{ $appointment->doctor->name }} · {{ $appointment->reason ?: 'Consulta' }}</p>
+                                <p class="truncate font-semibold {{ $appointment->status === \App\Models\Appointment::STATUS_CANCELLED ? 'text-red-800' : 'text-[#191346]' }}">{{ $appointment->patient->name }}</p>
+                                <p class="truncate text-sm {{ $appointment->status === \App\Models\Appointment::STATUS_CANCELLED ? 'text-red-700' : 'text-slate-500' }}">{{ $appointment->doctor?->name ?? 'Médico no disponible' }} · {{ $appointment->reason ?: 'Consulta' }}</p>
                             </div>
-                            <span class="shrink-0 rounded-full bg-[#EAFBF7] px-2.5 py-1 text-xs font-semibold text-[#0f766e]">{{ $appointment->scheduled_at->format('H:i') }}</span>
+                            <div class="shrink-0 text-right">
+                                <span class="rounded-full px-2.5 py-1 text-xs font-semibold {{ $appointment->status === \App\Models\Appointment::STATUS_CANCELLED ? 'bg-red-100 text-red-700' : 'bg-[#EAFBF7] text-[#0f766e]' }}">{{ $appointment->scheduled_at->format('H:i') }}</span>
+                                @if ($appointment->status === \App\Models\Appointment::STATUS_CANCELLED)
+                                    <span class="mt-1 block text-[10px] font-semibold text-red-700">Cancelada</span>
+                                @endif
+                            </div>
                         </div>
                     @empty
                         <p class="rounded-xl bg-white p-5 text-sm text-slate-500">No hay citas activas para hoy.</p>

@@ -80,6 +80,11 @@
                                                 <p class="mt-1 truncate text-xs text-red-700">{{ $slot['appointment']->patient?->name ?? 'Cita registrada' }}</p>
                                                 <p class="mt-1 text-[11px] text-red-600">{{ $slot['appointment']->reason ?: 'Consulta' }}</p>
                                             </div>
+                                        @elseif ($slot['expired'])
+                                            <div class="rounded-lg border border-slate-200 bg-slate-100 p-3">
+                                                <p class="text-sm font-semibold text-slate-600">{{ $slot['start'] }}–{{ $slot['end'] }}</p>
+                                                <p class="mt-1 text-xs text-slate-500">Expirado</p>
+                                            </div>
                                         @else
                                             <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
                                                 <p class="text-sm font-semibold text-emerald-800">{{ $slot['start'] }}–{{ $slot['end'] }}</p>

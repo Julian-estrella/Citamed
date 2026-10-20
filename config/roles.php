@@ -35,6 +35,9 @@ return [
             'gestionar_disponibilidad',
             'consultar_panel_principal_medico',
             'consultar_historial_citas_pacientes',
+            'programar_citas',
+            'modificar_citas',
+            'cancelar_citas',
         ],
         'panels' => [
             [
@@ -54,7 +57,6 @@ return [
             'gestionar_citas',
             'consultar_agenda',
             'consultar_horarios_disponibles_medicos',
-            'gestionar_medicos',
             'programar_citas',
             'modificar_citas',
             'cancelar_citas',

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Database\Factories\UserFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -78,6 +79,14 @@ class User extends Authenticatable
             'is_active' => 'boolean',
             'roles' => 'array',
         ];
+    }
+
+    public function scopeWhereHasRole(Builder $query, string $role): Builder
+    {
+        return $query->where(function (Builder $query) use ($role) {
+            $query->where('role', $role)
+                ->orWhereJsonContains('roles', $role);
+        });
     }
 
     public function assignedRoles(): array

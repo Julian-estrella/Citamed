@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Exists;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
 
@@ -32,7 +33,7 @@ class PanelSectionController extends Controller
             'direction' => ['sometimes', 'in:asc,desc'],
         ]);
 
-        if ($user->isMedico()) {
+        if ($user->isMedico() && ! $user->isAdmin()) {
             $query->where('is_active', true)
                 ->whereHas('appointments', fn ($appointments) => $appointments
                     ->where('doctor_id', $user->id)
@@ -98,7 +99,7 @@ class PanelSectionController extends Controller
         $user = Auth::user();
         $appointments = $patient->appointments()->with('doctor');
 
-        if ($user->isMedico()) {
+        if ($user->isMedico() && ! $user->isAdmin()) {
             abort_unless(
                 $patient->is_active && $patient->appointments()
                     ->where('doctor_id', $user->id)
@@ -140,6 +141,10 @@ class PanelSectionController extends Controller
     public function doctors(Request $request)
     {
         $user = Auth::user();
+        if ($user->isRecepcion() && ! $user->hasPermission('gestionar_medicos')) {
+            return redirect()->route('recepcion.agenda');
+        }
+
         $filters = $request->validate([
             'search' => ['nullable', 'string', 'max:255'],
             'name' => ['nullable', 'string', 'max:255'],
@@ -152,7 +157,7 @@ class PanelSectionController extends Controller
         ]);
         $query = User::query()
             ->with('doctorProfile.shifts')
-            ->where('role', User::ROLE_MEDICO);
+            ->whereHasRole(User::ROLE_MEDICO);
 
         if (! $user->hasPermission('gestionar_medicos')) {
             $query->where('is_active', true);
@@ -518,11 +523,13 @@ class PanelSectionController extends Controller
     public function appointments(Request $request)
     {
         $user = Auth::user();
+        $isDoctor = $user->isMedico() && ! $user->isAdmin();
+        $routePrefix = $user->isAdmin() ? 'admin' : ($isDoctor ? 'medico' : 'recepcion');
         $query = Appointment::query()->with(['patient', 'doctor']);
         $filters = $request->validate([
             'anchor' => ['nullable', 'date_format:Y-m-d'],
             'view' => ['nullable', Rule::in(['day', 'week'])],
-            'doctor_id' => ['nullable', 'integer', Rule::exists('users', 'id')->where('role', User::ROLE_MEDICO)],
+            'doctor_id' => ['nullable', 'integer', $this->doctorExistsRule(activeOnly: false)],
             'patient' => ['nullable', 'string', 'max:255'],
             'reason' => ['nullable', 'string', 'max:255'],
             'status' => ['nullable', 'in:'.Appointment::STATUS_SCHEDULED.','.Appointment::STATUS_CONFIRMED.','.Appointment::STATUS_CANCELLED],
@@ -532,11 +539,11 @@ class PanelSectionController extends Controller
         $rangeStart = $view === 'week' ? $anchor->startOfWeek() : $anchor->startOfDay();
         $rangeEnd = $view === 'week' ? $anchor->endOfWeek() : $anchor->endOfDay();
 
-        if ($user->isMedico()) {
+        if ($isDoctor) {
             $query->where('doctor_id', $user->id);
         }
 
-        if (! empty($filters['doctor_id']) && ! $user->isMedico()) {
+        if (! empty($filters['doctor_id']) && ! $isDoctor) {
             $query->where('doctor_id', $filters['doctor_id']);
         }
         $query->whereBetween('scheduled_at', [$rangeStart, $rangeEnd]);
@@ -555,12 +562,12 @@ class PanelSectionController extends Controller
 
         return view('admin.citas.index', [
             'user' => $user,
-            'title' => $user->isMedico() ? 'Mis citas' : 'Citas',
+            'title' => $isDoctor ? 'Mis citas' : 'Citas',
             'appointments' => $query->orderBy('scheduled_at')->get(),
             'patients' => Patient::where('is_active', true)->orderBy('name')->get(),
-            'doctors' => User::query()->where('role', User::ROLE_MEDICO)
+            'doctors' => User::query()->whereHasRole(User::ROLE_MEDICO)
                 ->where('is_active', true)->orderBy('name')->get(),
-            'filterDoctors' => User::query()->where('role', User::ROLE_MEDICO)->orderBy('name')->get(),
+            'filterDoctors' => User::query()->whereHasRole(User::ROLE_MEDICO)->orderBy('name')->get(),
             'filters' => $filters,
             'view' => $view,
             'anchor' => $anchor,
@@ -574,9 +581,12 @@ class PanelSectionController extends Controller
 
     public function appointmentSlots(Request $request)
     {
+        if (Auth::user()->isMedico() && ! Auth::user()->isAdmin()) {
+            $request->merge(['doctor_id' => Auth::id()]);
+        }
+
         $validated = $request->validate([
-            'doctor_id' => ['required', 'integer', Rule::exists('users', 'id')->where(fn ($query) => $query
-                ->where('role', User::ROLE_MEDICO)->where('is_active', true))],
+            'doctor_id' => ['required', 'integer', $this->doctorExistsRule()],
             'date' => ['required', 'date_format:Y-m-d', 'after_or_equal:today'],
             'appointment_id' => ['nullable', Rule::exists('appointments', 'id')->where(fn ($query) => $query
                 ->where('doctor_id', $request->input('doctor_id'))
@@ -595,10 +605,13 @@ class PanelSectionController extends Controller
 
     public function storeAppointment(Request $request)
     {
+        if (Auth::user()->isMedico() && ! Auth::user()->isAdmin()) {
+            $request->merge(['doctor_id' => Auth::id()]);
+        }
+
         $validated = $request->validate([
-            'patient_id' => ['required', Rule::exists('patients', 'id')->where('is_active', true)],
-            'doctor_id' => ['required', Rule::exists('users', 'id')->where(fn ($query) => $query
-                ->where('role', User::ROLE_MEDICO)->where('is_active', true))],
+            'patient_id' => $this->appointmentPatientRules(),
+            'doctor_id' => ['required', $this->doctorExistsRule()],
             'scheduled_at' => ['required', 'date', 'after_or_equal:now'],
             'reason' => ['nullable', 'string', 'max:255'],
         ]);
@@ -611,19 +624,26 @@ class PanelSectionController extends Controller
 
     public function editAppointment(Appointment $appointment)
     {
+        $this->authorizeDoctorAppointment($appointment);
+
         return view('admin.citas.edit', $this->appointmentFormData($appointment));
     }
 
     public function updateAppointment(Request $request, Appointment $appointment)
     {
+        $this->authorizeDoctorAppointment($appointment);
+
         if ($appointment->status === Appointment::STATUS_CANCELLED) {
             return redirect()->route($this->appointmentsRoute())->with('error', 'No se puede reprogramar una cita cancelada.');
         }
 
+        if (Auth::user()->isMedico() && ! Auth::user()->isAdmin()) {
+            $request->merge(['doctor_id' => Auth::id()]);
+        }
+
         $validated = $request->validate([
-            'patient_id' => ['required', Rule::exists('patients', 'id')->where('is_active', true)],
-            'doctor_id' => ['required', Rule::exists('users', 'id')->where(fn ($query) => $query
-                ->where('role', User::ROLE_MEDICO)->where('is_active', true))],
+            'patient_id' => $this->appointmentPatientRules(),
+            'doctor_id' => ['required', $this->doctorExistsRule()],
             'scheduled_at' => ['required', 'date', 'after_or_equal:now'],
             'reason' => ['nullable', 'string', 'max:255'],
             'reschedule_reason' => ['required', 'string', 'max:500'],
@@ -638,6 +658,8 @@ class PanelSectionController extends Controller
 
     public function cancelAppointment(Request $request, Appointment $appointment)
     {
+        $this->authorizeDoctorAppointment($appointment);
+
         $validated = $request->validate([
             'cancellation_reason' => ['required', 'string', 'max:500'],
         ]);
@@ -655,6 +677,8 @@ class PanelSectionController extends Controller
 
     public function confirmAppointment(Appointment $appointment)
     {
+        $this->authorizeDoctorAppointment($appointment);
+
         if ($appointment->status !== Appointment::STATUS_SCHEDULED) {
             return redirect()->route($this->appointmentsRoute())->with('error', 'Solo se pueden confirmar citas programadas.');
         }
@@ -667,13 +691,54 @@ class PanelSectionController extends Controller
 
     private function appointmentFormData(?Appointment $appointment = null): array
     {
+        $user = Auth::user();
+        $isDoctor = $user->isMedico() && ! $user->isAdmin();
+
         return [
-            'user' => Auth::user(),
+            'user' => $user,
             'appointment' => $appointment,
-            'patients' => Patient::query()->where('is_active', true)->orderBy('name')->get(),
-            'doctors' => User::query()->where('role', User::ROLE_MEDICO)
-                ->where('is_active', true)->orderBy('name')->get(),
+            'patients' => Patient::query()->where('is_active', true)
+                ->when($isDoctor, fn ($query) => $query->whereHas('appointments', fn ($appointments) => $appointments->where('doctor_id', $user->id)))
+                ->orderBy('name')->get(),
+            'doctors' => User::query()->whereHasRole(User::ROLE_MEDICO)
+                ->where('is_active', true)
+                ->when($isDoctor, fn ($query) => $query->whereKey($user->id))
+                ->with('doctorProfile.shifts')->orderBy('name')->get(),
         ];
+    }
+
+    private function authorizeDoctorAppointment(Appointment $appointment): void
+    {
+        $user = Auth::user();
+        if ($user->isMedico() && ! $user->isAdmin()) {
+            abort_unless($appointment->doctor_id === $user->id, 404);
+        }
+    }
+
+    private function appointmentPatientRules(): array
+    {
+        $user = Auth::user();
+        $rules = ['required', Rule::exists('patients', 'id')->where('is_active', true)];
+
+        if ($user->isMedico() && ! $user->isAdmin()) {
+            $rules[] = Rule::exists('appointments', 'patient_id')->where('doctor_id', $user->id);
+        }
+
+        return $rules;
+    }
+
+    private function doctorExistsRule(bool $activeOnly = true): Exists
+    {
+        return Rule::exists('users', 'id')->where(function ($query) use ($activeOnly) {
+            $query->where(function ($roles) {
+                $roles->where('role', User::ROLE_MEDICO)
+                    ->orWhereJsonContains('roles', User::ROLE_MEDICO);
+            });
+
+            if ($activeOnly) {
+                $query->where('is_active', true);
+            }
+        });
     }
 
     private function validateAppointmentAvailability(array $data, ?Appointment $except = null): void
@@ -696,8 +761,7 @@ class PanelSectionController extends Controller
     {
         $profile = DoctorProfile::query()->with('shifts')
             ->where('user_id', $doctorId)
-            ->whereHas('user', fn ($query) => $query
-                ->where('role', User::ROLE_MEDICO)->where('is_active', true))
+            ->whereHas('user', fn ($query) => $query->whereHasRole(User::ROLE_MEDICO)->where('is_active', true))
             ->first();
 
         if (! $profile || ! $profile->appointment_duration) {
@@ -750,13 +814,17 @@ class PanelSectionController extends Controller
         $filters = $request->validate([
             'anchor' => ['nullable', 'date_format:Y-m-d'],
             'month' => ['nullable', 'date_format:Y-m'],
-            'view' => ['nullable', Rule::in(['week', 'month', 'year'])],
+            'view' => ['nullable', Rule::in($user->isRecepcion() ? ['day', 'week', 'month'] : ['week', 'month', 'year'])],
         ]);
-        $calendarView = $filters['view'] ?? 'month';
+        $calendarView = $filters['view'] ?? ($user->isRecepcion() ? 'day' : 'month');
         $referenceDate = isset($filters['anchor'])
             ? CarbonImmutable::parse($filters['anchor'])
             : (isset($filters['month']) ? CarbonImmutable::createFromFormat('!Y-m', $filters['month']) : CarbonImmutable::today());
-        $routePrefix = $user->isMedico() ? 'medico' : ($user->isAdmin() ? 'admin' : 'recepcion');
+        $routePrefix = $user->isAdmin() ? 'admin' : ($user->isMedico() ? 'medico' : 'recepcion');
+
+        if ($user->isRecepcion() && $calendarView === 'day') {
+            return $this->agendaDay($referenceDate->format('Y-m-d'));
+        }
 
         return view('admin.agenda.index', array_merge([
             'user' => $user,
@@ -774,13 +842,15 @@ class PanelSectionController extends Controller
 
         $user = Auth::user();
         $availability = $this->doctorAvailabilityForDate($day, $user);
-        $routePrefix = $user->isMedico() ? 'medico' : ($user->isAdmin() ? 'admin' : 'recepcion');
+        $routePrefix = $user->isAdmin() ? 'admin' : ($user->isMedico() ? 'medico' : 'recepcion');
 
         return view('admin.agenda.day', [
             'date' => $day,
             'availability' => $availability,
             'daysOfWeek' => config('clinic.days'),
+            'user' => $user,
             'listRoute' => $routePrefix.'.agenda',
+            'isReception' => $user->isRecepcion(),
         ]);
     }
 
@@ -864,7 +934,7 @@ class PanelSectionController extends Controller
         $profiles = DoctorProfile::query()
             ->whereHas('user', fn ($query) => $query->where('is_active', true))
             ->with(['user', 'shifts'])
-            ->when($user->isMedico(), fn ($query) => $query->where('user_id', $user->id))
+            ->when($user->isMedico() && ! $user->isAdmin(), fn ($query) => $query->where('user_id', $user->id))
             ->when($office, fn ($query) => $query->where('office', $office))
             ->get();
         $appointments = Appointment::query()
@@ -896,6 +966,9 @@ class PanelSectionController extends Controller
         $doctors = [];
         $totalSlots = 0;
         $freeSlots = 0;
+        $occupiedSlots = 0;
+        $expiredSlots = 0;
+        $now = CarbonImmutable::now();
 
         foreach ($profiles as $profile) {
             $shifts = $profile->shifts->where('day_of_week', $weekday);
@@ -919,25 +992,32 @@ class PanelSectionController extends Controller
 
                         return $appointmentStart->lt($slotEnd) && $appointmentEnd->gt($cursor);
                     });
+                    $expired = $cursor->lt($now);
                     $slots[] = [
                         'start' => $cursor->format('H:i'),
                         'end' => $slotEnd->format('H:i'),
                         'appointment' => $appointment,
+                        'expired' => $expired,
                     ];
                     $cursor = $slotEnd;
                 }
             }
 
-            $doctorFreeSlots = collect($slots)->whereNull('appointment')->count();
+            $doctorFreeSlots = collect($slots)->filter(fn (array $slot) => $slot['appointment'] === null && ! $slot['expired'])->count();
+            $doctorOccupiedSlots = collect($slots)->filter(fn (array $slot) => $slot['appointment'] !== null)->count();
+            $doctorExpiredSlots = collect($slots)->filter(fn (array $slot) => $slot['appointment'] === null && $slot['expired'])->count();
             $totalSlots += count($slots);
             $freeSlots += $doctorFreeSlots;
+            $occupiedSlots += $doctorOccupiedSlots;
+            $expiredSlots += $doctorExpiredSlots;
             $doctors[] = [
                 'profile' => $profile,
                 'slots' => $slots,
                 'freeSlots' => $doctorFreeSlots,
+                'expiredSlots' => $doctorExpiredSlots,
             ];
         }
-
+        $availableDoctors = collect($doctors)->where('freeSlots', '>', 0)->count();
         $availableDoctors = collect($doctors)->where('freeSlots', '>', 0)->count();
         $status = $freeSlots === 0
             ? 'red'
@@ -950,7 +1030,8 @@ class PanelSectionController extends Controller
             'availableDoctors' => $availableDoctors,
             'totalSlots' => $totalSlots,
             'freeSlots' => $freeSlots,
-            'occupiedSlots' => max($totalSlots - $freeSlots, 0),
+            'occupiedSlots' => $occupiedSlots,
+            'expiredSlots' => $expiredSlots,
             'status' => $status,
         ];
     }
@@ -958,14 +1039,15 @@ class PanelSectionController extends Controller
     public function availability()
     {
         $user = Auth::user();
-        $routePrefix = $user->isMedico() ? 'medico' : ($user->isAdmin() ? 'admin' : 'recepcion');
+        $routePrefix = $user->isAdmin() ? 'admin' : ($user->isMedico() ? 'medico' : 'recepcion');
+        $isDoctor = $user->isMedico() && ! $user->isAdmin();
 
         return view('admin.agenda.index', array_merge([
             'user' => $user,
             'title' => 'Mi disponibilidad',
             'description' => 'Administra los espacios disponibles de atención.',
-            'agendaRoute' => $routePrefix.'.agenda',
-            'agendaDayRoute' => $routePrefix.'.agenda.day',
+            'agendaRoute' => $isDoctor ? 'medico.availability' : $routePrefix.'.agenda',
+            'agendaDayRoute' => $isDoctor ? 'medico.availability.day' : $routePrefix.'.agenda.day',
         ], $this->agendaCalendarData(CarbonImmutable::today(), 'month', $user)));
     }
 
@@ -1168,11 +1250,9 @@ class PanelSectionController extends Controller
 
     private function appointmentsRoute(): string
     {
-        return match (Auth::user()->role) {
-            User::ROLE_ADMINISTRADOR => 'admin.appointments',
-            User::ROLE_MEDICO => 'medico.appointments',
-            default => 'recepcion.appointments',
-        };
+        $user = Auth::user();
+
+        return $user->isAdmin() ? 'admin.appointments' : ($user->isMedico() ? 'medico.appointments' : 'recepcion.appointments');
     }
 
     private function patientValidationRules(?Patient $patient = null): array

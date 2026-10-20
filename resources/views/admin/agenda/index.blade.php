@@ -19,16 +19,18 @@
             </div>
             <div class="flex flex-wrap items-center gap-2">
                 <div class="inline-flex rounded-xl bg-slate-100 p-1" aria-label="Vista del calendario">
-                    @foreach (['week' => 'Semana', 'month' => 'Mes', 'year' => 'Año'] as $viewKey => $viewLabel)
+                    @foreach (($user->isRecepcion() ? ['day' => 'Día', 'week' => 'Semana', 'month' => 'Mes'] : ['week' => 'Semana', 'month' => 'Mes', 'year' => 'Año']) as $viewKey => $viewLabel)
                         <a href="{{ route($agendaRoute, ['view' => $viewKey, 'anchor' => $calendarAnchor->format('Y-m-d')]) }}" class="rounded-lg px-3 py-2 text-xs font-semibold {{ $calendarView === $viewKey ? 'bg-white text-[#223FAA] shadow-sm' : 'text-slate-600 hover:text-[#191346]' }}" @if ($calendarView === $viewKey) aria-current="page" @endif>{{ $viewLabel }}</a>
                     @endforeach
                 </div>
-                <form method="GET" action="{{ route($agendaRoute) }}" class="flex items-center gap-2">
+                @if ($calendarView !== 'day')
+                    <form method="GET" action="{{ route($agendaRoute) }}" class="flex items-center gap-2">
                     <input type="hidden" name="view" value="month">
                     <label for="agenda-month" class="sr-only">Seleccionar mes</label>
                     <input id="agenda-month" type="month" name="month" value="{{ $calendarAnchor->format('Y-m') }}" class="rounded-lg border-slate-200 text-sm focus:border-[#223FAA] focus:ring-[#223FAA]">
                     <button type="submit" aria-label="Ir al mes seleccionado" class="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-[#223FAA] text-white hover:bg-[#191346]"><i class="fa-solid fa-arrow-right" aria-hidden="true"></i></button>
-                </form>
+                    </form>
+                @endif
                 <div class="flex gap-1">
                     <a href="{{ route($agendaRoute, ['view' => $calendarView, 'anchor' => $calendarPrevious]) }}" aria-label="Periodo anterior" class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50"><i class="fa-solid fa-chevron-left" aria-hidden="true"></i></a>
                     <a href="{{ route($agendaRoute, ['view' => $calendarView, 'anchor' => $calendarNext]) }}" aria-label="Periodo siguiente" class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50"><i class="fa-solid fa-chevron-right" aria-hidden="true"></i></a>
@@ -84,10 +86,14 @@
                     <div class="grid grid-cols-7 gap-1.5">
                         @foreach ($calendarDays as $day)
                             @if ($day['inPeriod'] && $day['stats'])
-                                <a href="{{ route($agendaDayRoute, $day['date']->format('Y-m-d')) }}" aria-label="{{ $day['date']->format('d/m/Y') }}: {{ $day['stats']['availableDoctors'] }} médicos disponibles, {{ $day['stats']['freeSlots'] }} horarios libres" class="min-h-24 rounded-lg border p-2 transition {{ $availabilityClasses[$day['stats']['status']] }}">
+                                <a href="{{ route($agendaDayRoute, $day['date']->format('Y-m-d')) }}" aria-label="{{ $user->isMedico() ? $day['stats']['freeSlots'].' citas disponibles' : $day['date']->format('d/m/Y').': '.$day['stats']['availableDoctors'].' médicos disponibles, '.$day['stats']['freeSlots'].' horarios libres' }}" class="min-h-24 rounded-lg border p-2 transition {{ $availabilityClasses[$day['stats']['status']] }}">
                                     <span class="text-sm font-bold">{{ $day['date']->day }}</span>
-                                    <span class="mt-2 block text-[10px] leading-4">{{ $day['stats']['availableDoctors'] }}/{{ $day['stats']['totalDoctors'] }} médicos</span>
-                                    <span class="block text-[10px] leading-4">{{ $day['stats']['freeSlots'] }} horarios libres</span>
+                                    @if ($user->isMedico())
+                                    <span class="mt-2 block text-[10px] leading-4">{{ $day['stats']['freeSlots'] }} citas disponibles</span>
+                                    @else
+                                        <span class="mt-2 block text-[10px] leading-4">{{ $day['stats']['availableDoctors'] }}/{{ $day['stats']['totalDoctors'] }} médicos</span>
+                                        <span class="block text-[10px] leading-4">{{ $day['stats']['freeSlots'] }} horarios libres</span>
+                                    @endif
                                 </a>
                             @else
                                 <span class="min-h-24 rounded-lg border border-slate-100 bg-slate-50 p-2 text-sm text-slate-300">{{ $day['date']->day }}</span>

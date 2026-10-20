@@ -6,8 +6,8 @@
         $userName = $user?->name ?? 'Médico';
         $quickActions = [
             ['permission' => 'consultar_citas', 'label' => 'Mis citas', 'description' => 'Consultar las citas asignadas', 'icon' => 'fa-solid fa-calendar-check', 'route' => route('medico.appointments')],
+            ['permission' => 'programar_citas', 'label' => 'Programar cita', 'description' => 'Agendar una cita para uno de tus pacientes', 'icon' => 'fa-solid fa-calendar-plus', 'route' => route('medico.appointments.create')],
             ['permission' => 'consultar_pacientes_que_atiende', 'label' => 'Mis pacientes', 'description' => 'Consultar los pacientes asignados', 'icon' => 'fa-solid fa-user-injured', 'route' => route('medico.patients')],
-            ['permission' => 'gestionar_horario_atencion', 'label' => 'Gestionar horario', 'description' => 'Consultar tu agenda diaria', 'icon' => 'fa-solid fa-clock', 'route' => route('medico.agenda')],
             ['permission' => 'gestionar_disponibilidad', 'label' => 'Disponibilidad', 'description' => 'Administrar tus espacios disponibles', 'icon' => 'fa-solid fa-calendar-plus', 'route' => route('medico.availability')],
             ['permission' => 'consultar_historial_citas_pacientes', 'label' => 'Historial de citas', 'description' => 'Revisar citas anteriores de pacientes', 'icon' => 'fa-solid fa-file-medical', 'route' => route('medico.appointments')],
         ];
@@ -51,12 +51,17 @@
                     </div>
                     <div class="space-y-3">
                         @forelse ($todayAppointments as $appointment)
-                            <div class="flex items-center justify-between rounded-xl bg-white p-3 ring-1 ring-slate-200">
+                            <div class="flex items-center justify-between rounded-xl p-3 {{ $appointment->status === \App\Models\Appointment::STATUS_CANCELLED ? 'bg-red-50 ring-1 ring-red-200' : 'bg-white ring-1 ring-slate-200' }}">
                                 <div>
-                                    <p class="font-semibold text-[#191346]">{{ $appointment->patient->name }}</p>
-                                    <p class="text-sm text-slate-500">{{ $appointment->reason ?: 'Consulta' }}</p>
+                                    <p class="font-semibold {{ $appointment->status === \App\Models\Appointment::STATUS_CANCELLED ? 'text-red-800' : 'text-[#191346]' }}">{{ $appointment->patient->name }}</p>
+                                    <p class="text-sm {{ $appointment->status === \App\Models\Appointment::STATUS_CANCELLED ? 'text-red-700' : 'text-slate-500' }}">{{ $appointment->reason ?: 'Consulta' }}</p>
                                 </div>
-                                <span class="rounded-full bg-[#EAFBF7] px-2.5 py-1 text-xs font-semibold text-[#0f766e]">{{ $appointment->scheduled_at->format('H:i') }}</span>
+                                <div class="text-right">
+                                    <span class="rounded-full px-2.5 py-1 text-xs font-semibold {{ $appointment->status === \App\Models\Appointment::STATUS_CANCELLED ? 'bg-red-100 text-red-700' : 'bg-[#EAFBF7] text-[#0f766e]' }}">{{ $appointment->scheduled_at->format('H:i') }}</span>
+                                    @if ($appointment->status === \App\Models\Appointment::STATUS_CANCELLED)
+                                        <span class="mt-1 block text-[10px] font-semibold text-red-700">Cancelada</span>
+                                    @endif
+                                </div>
                             </div>
                         @empty
                             <p class="rounded-xl bg-white p-4 text-sm text-slate-500">No tienes citas activas para hoy.</p>

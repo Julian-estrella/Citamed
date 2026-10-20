@@ -15,19 +15,18 @@
             ['label' => 'Inicio', 'route' => route('medico.dashboard'), 'icon' => 'fa-solid fa-house', 'permission' => 'consultar_panel_principal_medico'],
             ['label' => 'Mis citas', 'route' => route('medico.appointments'), 'icon' => 'fa-solid fa-calendar-check', 'permission' => 'consultar_citas'],
             ['label' => 'Pacientes', 'route' => route('medico.patients'), 'icon' => 'fa-solid fa-user-injured', 'permission' => 'consultar_pacientes_que_atiende'],
-            ['label' => 'Horario', 'route' => route('medico.agenda'), 'icon' => 'fa-solid fa-clock', 'permission' => 'gestionar_horario_atencion'],
             ['label' => 'Disponibilidad', 'route' => route('medico.availability'), 'icon' => 'fa-solid fa-check-circle', 'permission' => 'gestionar_disponibilidad'],
         ],
         'recepcion' => [
             ['label' => 'Inicio', 'route' => route('recepcion.dashboard'), 'icon' => 'fa-solid fa-house', 'permission' => 'consultar_agenda'],
             ['label' => 'Pacientes', 'route' => route('recepcion.patients'), 'icon' => 'fa-solid fa-user-injured', 'permission' => 'consultar_pacientes'],
             ['label' => 'Citas', 'route' => route('recepcion.appointments'), 'icon' => 'fa-solid fa-calendar-check', 'permission' => 'gestionar_citas'],
-            ['label' => 'Agenda', 'route' => route('recepcion.agenda'), 'icon' => 'fa-solid fa-calendar-days', 'permission' => 'consultar_agenda'],
-            ['label' => 'Horarios médicos', 'route' => route('recepcion.doctors'), 'icon' => 'fa-solid fa-clipboard-list', 'permission' => 'consultar_horarios_disponibles_medicos'],
-            ['label' => 'Consultorios', 'route' => route('recepcion.consultorios'), 'icon' => 'fa-solid fa-door-open', 'permission' => 'gestionar_medicos'],
+            ['label' => 'Horarios médicos', 'route' => route('recepcion.agenda'), 'icon' => 'fa-solid fa-calendar-days', 'permission' => 'consultar_horarios_disponibles_medicos'],
         ],
     ];
-    $menu = collect($navigation[$role] ?? $navigation['recepcion'])
+    $menu = collect($user?->assignedRoles() ?? [$role])
+        ->flatMap(fn (string $assignedRole) => $navigation[$assignedRole] ?? [])
+        ->unique('route')
         ->filter(fn (array $item) => $user?->hasPermission($item['permission']) ?? false)
         ->values();
     $roleLabel = match ($role) {

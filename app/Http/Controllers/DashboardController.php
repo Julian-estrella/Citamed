@@ -11,18 +11,22 @@ class DashboardController extends Controller
 {
     public function admin()
     {
-        $todayAppointments = $this->activeAppointments()
+        $activeTodayAppointments = $this->activeAppointments()
             ->whereDate('scheduled_at', today())
+            ->with(['patient', 'doctor'])
+            ->orderBy('scheduled_at')
+            ->get();
+        $todayAppointments = $this->appointmentsForToday()
             ->with(['patient', 'doctor'])
             ->orderBy('scheduled_at')
             ->get();
 
         return view('admin.index', [
             'patientCount' => Patient::where('is_active', true)->count(),
-            'todayAppointmentCount' => $todayAppointments->count(),
+            'todayAppointmentCount' => $activeTodayAppointments->count(),
             'doctorCount' => $this->activeDoctorCount(),
-            'confirmedAppointmentCount' => $todayAppointments->where('status', Appointment::STATUS_CONFIRMED)->count(),
-            'scheduledAppointmentCount' => $todayAppointments->where('status', Appointment::STATUS_SCHEDULED)->count(),
+            'confirmedAppointmentCount' => $activeTodayAppointments->where('status', Appointment::STATUS_CONFIRMED)->count(),
+            'scheduledAppointmentCount' => $activeTodayAppointments->where('status', Appointment::STATUS_SCHEDULED)->count(),
             'cancelledAppointmentCount' => Appointment::query()->whereDate('scheduled_at', today())
                 ->where('status', Appointment::STATUS_CANCELLED)->count(),
             'todayAppointments' => $todayAppointments,
@@ -32,9 +36,14 @@ class DashboardController extends Controller
     public function doctor()
     {
         $user = Auth::user();
-        $todayAppointments = $this->activeAppointments()
+        $activeTodayAppointments = $this->activeAppointments()
             ->where('doctor_id', $user->id)
             ->whereDate('scheduled_at', today())
+            ->with('patient')
+            ->orderBy('scheduled_at')
+            ->get();
+        $todayAppointments = $this->appointmentsForToday()
+            ->where('doctor_id', $user->id)
             ->with('patient')
             ->orderBy('scheduled_at')
             ->get();
@@ -46,7 +55,7 @@ class DashboardController extends Controller
             ->count('patient_id');
 
         return view('layout.medico.index', [
-            'todayAppointmentCount' => $todayAppointments->count(),
+            'todayAppointmentCount' => $activeTodayAppointments->count(),
             'patientCount' => $patientCount,
             'todayAppointments' => $todayAppointments,
         ]);
@@ -54,18 +63,33 @@ class DashboardController extends Controller
 
     public function reception()
     {
-        $todayAppointments = $this->activeAppointments()
+        $activeTodayAppointments = $this->activeAppointments()
             ->whereDate('scheduled_at', today())
+            ->count();
+        $todayAppointments = $this->appointmentsForToday()
             ->with(['patient', 'doctor'])
             ->orderBy('scheduled_at')
             ->get();
 
         return view('layout.recepcion.index', [
             'patientCount' => Patient::where('is_active', true)->count(),
-            'todayAppointmentCount' => $todayAppointments->count(),
+            'todayAppointmentCount' => $activeTodayAppointments,
             'doctorCount' => $this->activeDoctorCount(),
             'todayAppointments' => $todayAppointments,
         ]);
+    }
+
+    private function appointmentsForToday()
+    {
+        return Appointment::query()
+            ->whereDate('scheduled_at', today())
+            ->whereHas('patient', fn ($query) => $query->where('is_active', true))
+            ->whereHas('doctor', fn ($query) => $query->where('is_active', true))
+            ->whereIn('status', [
+                Appointment::STATUS_SCHEDULED,
+                Appointment::STATUS_CONFIRMED,
+                Appointment::STATUS_CANCELLED,
+            ]);
     }
 
     private function activeAppointments()
@@ -79,7 +103,7 @@ class DashboardController extends Controller
     private function activeDoctorCount(): int
     {
         return User::query()
-            ->where('role', User::ROLE_MEDICO)
+            ->whereHasRole(User::ROLE_MEDICO)
             ->where('is_active', true)
             ->count();
     }

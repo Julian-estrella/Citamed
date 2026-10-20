@@ -109,6 +109,19 @@ class AppointmentManagementTest extends TestCase
         ])->assertSessionHasErrors('doctor_id');
     }
 
+    public function test_appointment_form_shows_doctor_specialty_and_working_days(): void
+    {
+        $reception = User::factory()->create(['role' => User::ROLE_RECEPCION]);
+        $doctor = $this->createDoctorWithShift();
+
+        $this->actingAs($reception)->get(route('recepcion.appointments.create'))
+            ->assertOk()
+            ->assertSee($doctor->name.' — Medicina general')
+            ->assertSee('data-working-days="['.$this->scheduledAt('10:00')->isoWeekday().']"', false)
+            ->assertSee('Días que trabaja')
+            ->assertSee('Días que no trabaja');
+    }
+
     public function test_appointments_can_be_rescheduled_cancelled_and_confirmed_with_reasons(): void
     {
         $reception = User::factory()->create(['role' => User::ROLE_RECEPCION]);
@@ -149,6 +162,85 @@ class AppointmentManagementTest extends TestCase
         ]);
     }
 
+    public function test_doctors_can_manage_only_their_own_appointments(): void
+    {
+        $doctor = $this->createDoctorWithShift();
+        $otherDoctor = $this->createDoctorWithShift();
+        $patient = Patient::create(['name' => 'Paciente del médico', 'is_active' => true]);
+        $appointment = Appointment::create([
+            'patient_id' => $patient->id,
+            'doctor_id' => $doctor->id,
+            'scheduled_at' => $this->scheduledAt('10:00'),
+            'status' => Appointment::STATUS_SCHEDULED,
+        ]);
+        $otherAppointment = Appointment::create([
+            'patient_id' => $patient->id,
+            'doctor_id' => $otherDoctor->id,
+            'scheduled_at' => $this->scheduledAt('10:00'),
+            'status' => Appointment::STATUS_SCHEDULED,
+        ]);
+
+        $this->actingAs($doctor)->get(route('medico.appointments', [
+            'anchor' => $this->scheduledAt('10:00')->format('Y-m-d'),
+        ]))
+            ->assertOk()
+            ->assertSee('Nueva cita')
+            ->assertSee($patient->name);
+        $this->get(route('medico.appointments.create'))
+            ->assertOk()
+            ->assertSee($doctor->name.' — Medicina general')
+            ->assertSee('value="'.$doctor->id.'"', false);
+
+        $this->post(route('medico.appointments.store'), [
+            'patient_id' => $patient->id,
+            'doctor_id' => $otherDoctor->id,
+            'scheduled_at' => $this->scheduledAt('09:00')->format('Y-m-d\\TH:i'),
+            'reason' => 'Consulta de seguimiento',
+        ])->assertRedirect(route('medico.appointments'));
+
+        $createdAppointment = Appointment::query()
+            ->where('doctor_id', $doctor->id)
+            ->where('scheduled_at', $this->scheduledAt('09:00'))
+            ->firstOrFail();
+
+        $this->put(route('medico.appointments.update', $createdAppointment), [
+            'patient_id' => $patient->id,
+            'doctor_id' => $otherDoctor->id,
+            'scheduled_at' => $this->scheduledAt('10:30')->format('Y-m-d\\TH:i'),
+            'reason' => 'Consulta de seguimiento',
+            'reschedule_reason' => 'Cambio solicitado por el paciente.',
+        ])->assertRedirect(route('medico.appointments'));
+        $this->assertDatabaseHas('appointments', [
+            'id' => $createdAppointment->id,
+            'doctor_id' => $doctor->id,
+            'scheduled_at' => $this->scheduledAt('10:30')->format('Y-m-d H:i:s'),
+        ]);
+
+        $this->patch(route('medico.appointments.cancel', $createdAppointment), [
+            'cancellation_reason' => 'No podrá asistir.',
+        ])->assertRedirect(route('medico.appointments'));
+        $this->assertDatabaseHas('appointments', [
+            'id' => $createdAppointment->id,
+            'status' => Appointment::STATUS_CANCELLED,
+        ]);
+
+        $this->get(route('medico.appointments.edit', $otherAppointment))->assertNotFound();
+        $this->patch(route('medico.appointments.cancel', $otherAppointment), [
+            'cancellation_reason' => 'Intento no autorizado.',
+        ])->assertNotFound();
+    }
+
+    public function test_doctor_availability_uses_personal_free_slot_labels(): void
+    {
+        $doctor = $this->createDoctorWithShift();
+
+        $this->actingAs($doctor)->get(route('medico.availability'))
+            ->assertOk()
+            ->assertSee('8 citas disponibles')
+            ->assertDontSee('1/1 médicos')
+            ->assertSee(route('medico.availability.day', $this->scheduledAt('10:00')->format('Y-m-d')));
+    }
+
     public function test_appointment_list_can_show_a_week_for_a_selected_doctor_and_roles_are_enforced(): void
     {
         $admin = User::factory()->create(['role' => User::ROLE_ADMINISTRADOR]);
@@ -169,6 +261,44 @@ class AppointmentManagementTest extends TestCase
 
         $medicalUser = User::factory()->create(['role' => User::ROLE_MEDICO]);
         $this->actingAs($medicalUser)->get(route('admin.appointments.create'))->assertForbidden();
+    }
+
+    public function test_cancel_action_opens_a_centered_reason_dialog_with_dimmed_backdrop(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMINISTRADOR]);
+        $patient = Patient::create(['name' => 'Paciente para cancelar', 'is_active' => true]);
+        $doctor = $this->createDoctorWithShift();
+        $appointment = Appointment::create([
+            'patient_id' => $patient->id,
+            'doctor_id' => $doctor->id,
+            'scheduled_at' => CarbonImmutable::now()->addHour(),
+            'status' => Appointment::STATUS_SCHEDULED,
+        ]);
+
+        $this->actingAs($admin)->get(route('admin.appointments'))
+            ->assertOk()
+            ->assertSee('id="cancel-appointment-modal"', false)
+            ->assertSee('backdrop:bg-slate-950/50', false)
+            ->assertSee('data-cancel-url="'.route('admin.appointments.cancel', $appointment).'"', false);
+    }
+
+    public function test_cancelled_appointments_are_highlighted_in_the_admin_dashboard(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMINISTRADOR]);
+        $patient = Patient::create(['name' => 'Paciente con cita cancelada', 'is_active' => true]);
+        $doctor = $this->createDoctorWithShift();
+        Appointment::create([
+            'patient_id' => $patient->id,
+            'doctor_id' => $doctor->id,
+            'scheduled_at' => CarbonImmutable::today()->setTime(10, 0),
+            'status' => Appointment::STATUS_CANCELLED,
+        ]);
+
+        $this->actingAs($admin)->get(route('admin.panel'))
+            ->assertOk()
+            ->assertSee('Paciente con cita cancelada')
+            ->assertSee('border-red-200 bg-red-50', false)
+            ->assertSee('Cancelada');
     }
 
     private function createDoctorWithShift(): User

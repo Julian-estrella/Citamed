@@ -2,8 +2,9 @@
 
 @section('content')
     @php
-        $updateRoute = $user->isAdmin() ? 'admin.appointments.update' : 'recepcion.appointments.update';
-        $listRoute = $user->isAdmin() ? 'admin.appointments' : 'recepcion.appointments';
+        $routePrefix = $user->isAdmin() ? 'admin' : ($user->isMedico() ? 'medico' : 'recepcion');
+        $updateRoute = $routePrefix.'.appointments.update';
+        $listRoute = $routePrefix.'.appointments';
     @endphp
 
     <div class="mx-auto flex w-full max-w-5xl flex-col gap-6">

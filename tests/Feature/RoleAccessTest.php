@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Models\Appointment;
 use App\Models\Patient;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 class RoleAccessTest extends TestCase
@@ -34,6 +35,9 @@ class RoleAccessTest extends TestCase
 
         $this->assertTrue($recepcionista->canAccessPanel('recepcion.dashboard'));
         $this->assertFalse($recepcionista->canAccessPanel('admin.panel'));
+        $this->assertFalse($recepcionista->hasPermission('gestionar_medicos'));
+        $this->assertFalse($recepcionista->hasPermission('gestionar_usuarios'));
+        $this->assertTrue($recepcionista->hasPermission('consultar_horarios_disponibles_medicos'));
     }
 
     public function test_inactive_users_have_no_permissions_or_panel_access(): void
@@ -82,8 +86,25 @@ class RoleAccessTest extends TestCase
             ->assertOk()
             ->assertSee('Registrar paciente')
             ->assertSee('Programar cita')
+            ->assertSee(route('recepcion.patients.create'))
+            ->assertSee(route('recepcion.appointments.create'))
             ->assertSee('Consultar horarios')
             ->assertDontSee('Gestión de usuarios');
+    }
+
+    public function test_admin_quick_actions_link_directly_to_create_forms(): void
+    {
+        $admin = User::factory()->create(['role' => 'administrador']);
+
+        $this->actingAs($admin)
+            ->get(route('admin.panel'))
+            ->assertOk()
+            ->assertSee('Registrar paciente')
+            ->assertSee(route('admin.patients.create'))
+            ->assertSee('Registrar médico')
+            ->assertSee(route('admin.doctors.create'))
+            ->assertSee('Programar cita')
+            ->assertSee(route('admin.appointments.create'));
     }
 
     public function test_doctor_dashboard_shows_profile_menu_and_permitted_actions(): void
@@ -98,7 +119,9 @@ class RoleAccessTest extends TestCase
             ->assertSee('Modificar usuario')
             ->assertSee('Cerrar sesión')
             ->assertSee('Mis citas')
-            ->assertSee('Gestionar horario')
+            ->assertSee('Programar cita')
+            ->assertSee('Disponibilidad')
+            ->assertDontSee(route('medico.agenda'))
             ->assertDontSee('Registrar paciente');
     }
 
@@ -159,10 +182,19 @@ class RoleAccessTest extends TestCase
             ->assertSee('Modificar usuario')
             ->assertSee('bg-[#e8ebf4]');
         $this->actingAs($reception)->get(route('recepcion.patients.create'))->assertOk()->assertSee('Registrar paciente');
-        $this->actingAs($reception)->get(route('recepcion.doctors'))->assertOk()->assertSee('Nuevo médico');
-        $this->get(route('recepcion.doctors.create'))->assertOk()->assertSee('Consultorio 5');
+        $this->actingAs($reception)->get(route('recepcion.doctors'))
+            ->assertRedirect(route('recepcion.agenda'));
+        $this->get(route('recepcion.doctors.create'))->assertForbidden();
+        $this->get(route('recepcion.consultorios'))->assertForbidden();
         $this->actingAs($reception)->get(route('recepcion.appointments'))->assertOk();
-        $this->actingAs($reception)->get(route('recepcion.agenda'))->assertOk();
+        $this->actingAs($reception)->get(route('recepcion.agenda'))
+            ->assertOk()
+            ->assertSee('Horarios disponibles por médico')
+            ->assertSee('Día')
+            ->assertSee('Semana')
+            ->assertSee('Mes');
+        $this->get(route('recepcion.agenda', ['view' => 'week']))->assertOk()->assertSee('Semana');
+        $this->get(route('recepcion.agenda', ['view' => 'month']))->assertOk()->assertSee('Mes');
         $this->actingAs($reception)->get(route('medico.patients'))->assertForbidden();
     }
 
@@ -774,6 +806,9 @@ class RoleAccessTest extends TestCase
         $this->assertTrue($user->isMedico());
         $this->assertTrue($user->hasPermission('gestionar_usuarios'));
         $this->assertTrue($user->hasPermission('consultar_citas'));
+        $this->actingAs($admin)->get(route('admin.doctors'))
+            ->assertOk()
+            ->assertSee($user->name);
 
         $this->put(route('admin.users.update', $user), [
             'name' => $user->name,
@@ -787,6 +822,13 @@ class RoleAccessTest extends TestCase
         $this->assertTrue($user->isMedico());
         $this->assertTrue($user->isRecepcion());
         $this->assertFalse($user->isAdmin());
+        $this->assertTrue($user->hasPermission('gestionar_disponibilidad'));
+        $this->assertTrue($user->hasPermission('registrar_pacientes'));
+        $this->assertTrue($user->hasPermission('programar_citas'));
+        $this->assertFalse($user->hasPermission('gestionar_usuarios'));
+        $panelKeys = array_column($user->availablePanels(), 'key');
+        $this->assertContains('medico.dashboard', $panelKeys);
+        $this->assertContains('recepcion.dashboard', $panelKeys);
     }
 
     public function test_doctor_profile_validates_identity_fields_phone_and_office_schedule_conflicts(): void
@@ -857,7 +899,7 @@ class RoleAccessTest extends TestCase
             ->assertDontSee($firstDoctor->name);
     }
 
-    public function test_admin_and_reception_can_register_doctors_with_fixed_offices_and_shifts(): void
+    public function test_only_admin_can_register_doctors_with_fixed_offices_and_shifts(): void
     {
         $admin = User::factory()->create(['role' => 'administrador']);
         $reception = User::factory()->create(['role' => 'recepcion']);
@@ -891,28 +933,9 @@ class RoleAccessTest extends TestCase
             'end_time' => '14:00',
         ]);
 
-        $receptionDoctorData = array_merge($doctorData, [
-            'name' => 'Doctor Recepción',
-            'email' => 'doctor.recepcion@example.test',
-            'license_number' => 'CED-20002',
-            'phone' => '87654321',
-        ]);
-
-        $this->actingAs($reception)->post(route('recepcion.doctors.store'), $receptionDoctorData)
-            ->assertSessionHasErrors('shifts.0.days');
-
-        $receptionDoctorData['shifts'] = [['days' => ['1'], 'session' => 'vespertino']];
-        $this->post(route('recepcion.doctors.store'), $receptionDoctorData)
-            ->assertRedirect(route('recepcion.doctors'));
-
-        $secondDoctor = User::where('email', $receptionDoctorData['email'])->firstOrFail();
-        $this->assertDatabaseHas('doctor_profiles', [
-            'user_id' => $secondDoctor->id,
-            'license_number' => 'MG000002',
-        ]);
-        $this->get(route('recepcion.doctors.edit', $secondDoctor))
-            ->assertOk()
-            ->assertSee('Vespertino');
+        $this->actingAs($reception)->post(route('recepcion.doctors.store'), $doctorData)
+            ->assertForbidden();
+        $this->get(route('recepcion.doctors.edit', $firstDoctor))->assertForbidden();
     }
 
     public function test_consultation_rooms_are_filterable_numbered_and_show_weekly_availability(): void
@@ -976,7 +999,7 @@ class RoleAccessTest extends TestCase
             'office' => 'Consultorio 1',
         ]);
         $profile->shifts()->create([
-            'day_of_week' => today()->dayOfWeekIso,
+            'day_of_week' => today()->addDay()->dayOfWeekIso,
             'start_time' => '07:00',
             'end_time' => '08:00',
         ]);
@@ -984,12 +1007,12 @@ class RoleAccessTest extends TestCase
         Appointment::create([
             'patient_id' => $patient->id,
             'doctor_id' => $doctor->id,
-            'scheduled_at' => today()->setTime(7, 0),
+            'scheduled_at' => today()->addDay()->setTime(7, 0),
             'reason' => 'Control',
             'status' => Appointment::STATUS_SCHEDULED,
         ]);
         $room = \App\Models\ConsultationRoom::query()->where('room_number', 1)->firstOrFail();
-        $anchor = today()->toDateString();
+        $anchor = today()->addDay()->toDateString();
 
         $this->actingAs($admin)->get(route('admin.consultorios.availability', ['room' => $room, 'view' => 'day', 'anchor' => $anchor]))
             ->assertOk()
@@ -1143,5 +1166,56 @@ class RoleAccessTest extends TestCase
             ->assertSee('07:00–07:30 · Ocupado')
             ->assertSee('07:30–08:00')
             ->assertSee('Disponible');
+
+        $reception = User::factory()->create(['role' => 'recepcion']);
+        $this->actingAs($reception)->get(route('recepcion.agenda.day', $anchor))
+            ->assertOk()
+            ->assertSee('Horarios disponibles por médico')
+            ->assertSee('No disponible')
+            ->assertDontSee('Paciente Agenda')
+            ->assertSee('Día')
+            ->assertSee('Semana')
+            ->assertSee('Mes');
+    }
+
+    public function test_past_available_slots_are_expired_and_not_counted_as_free(): void
+    {
+        Carbon::setTestNow(now()->setTime(10, 0));
+
+        try {
+            $admin = User::factory()->create(['role' => 'administrador']);
+            $doctor = User::factory()->create(['role' => 'medico', 'name' => 'Doctora Horarios']);
+            $profile = $doctor->doctorProfile()->create([
+                'professional_title' => 'Dra.',
+                'license_number' => 'CED-EXP-1',
+                'specialty' => 'Medicina general',
+                'phone' => '89898989',
+                'appointment_duration' => 45,
+                'office' => 'Consultorio 1',
+            ]);
+            $weekday = today()->dayOfWeekIso;
+            $profile->shifts()->create([
+                'day_of_week' => $weekday,
+                'start_time' => '07:00',
+                'end_time' => '12:15',
+            ]);
+
+            $anchor = today()->toDateString();
+            $this->actingAs($admin)->get(route('admin.agenda.day', $anchor))
+                ->assertOk()
+                ->assertSee('Expirado')
+                ->assertSee('border-slate-200 bg-slate-100', false)
+                ->assertSee('10:00–10:45')
+                ->assertSee('3 espacios libres');
+
+            $room = \App\Models\ConsultationRoom::query()->where('room_number', 1)->firstOrFail();
+            $this->get(route('admin.consultorios.availability', ['room' => $room, 'view' => 'day', 'anchor' => $anchor]))
+                ->assertOk()
+                ->assertSee('Expirado')
+                ->assertSee('border-slate-200 bg-slate-100', false)
+                ->assertSee('3 horarios libres');
+        } finally {
+            Carbon::setTestNow();
+        }
     }
 }
