@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
+use Illuminate\Validation\ValidationException;
 
 class PanelSectionController extends Controller
 {
@@ -519,25 +520,29 @@ class PanelSectionController extends Controller
         $user = Auth::user();
         $query = Appointment::query()->with(['patient', 'doctor']);
         $filters = $request->validate([
-            'scheduled_date' => ['nullable', 'date_format:Y-m-d'],
+            'anchor' => ['nullable', 'date_format:Y-m-d'],
+            'view' => ['nullable', Rule::in(['day', 'week'])],
+            'doctor_id' => ['nullable', 'integer', Rule::exists('users', 'id')->where('role', User::ROLE_MEDICO)],
             'patient' => ['nullable', 'string', 'max:255'],
-            'doctor' => ['nullable', 'string', 'max:255'],
             'reason' => ['nullable', 'string', 'max:255'],
             'status' => ['nullable', 'in:'.Appointment::STATUS_SCHEDULED.','.Appointment::STATUS_CONFIRMED.','.Appointment::STATUS_CANCELLED],
         ]);
+        $view = $filters['view'] ?? 'day';
+        $anchor = CarbonImmutable::parse($filters['anchor'] ?? today()->toDateString());
+        $rangeStart = $view === 'week' ? $anchor->startOfWeek() : $anchor->startOfDay();
+        $rangeEnd = $view === 'week' ? $anchor->endOfWeek() : $anchor->endOfDay();
 
         if ($user->isMedico()) {
             $query->where('doctor_id', $user->id);
         }
 
-        if (! empty($filters['scheduled_date'])) {
-            $query->whereDate('scheduled_at', $filters['scheduled_date']);
+        if (! empty($filters['doctor_id']) && ! $user->isMedico()) {
+            $query->where('doctor_id', $filters['doctor_id']);
         }
+        $query->whereBetween('scheduled_at', [$rangeStart, $rangeEnd]);
 
-        foreach (['patient' => 'patient', 'doctor' => 'doctor'] as $filter => $relation) {
-            if (! empty($filters[$filter])) {
-                $query->whereHas($relation, fn ($related) => $related->where('name', 'like', '%'.$filters[$filter].'%'));
-            }
+        if (! empty($filters['patient'])) {
+            $query->whereHas('patient', fn ($related) => $related->where('name', 'like', '%'.$filters['patient'].'%'));
         }
 
         if (! empty($filters['reason'])) {
@@ -551,11 +556,40 @@ class PanelSectionController extends Controller
         return view('admin.citas.index', [
             'user' => $user,
             'title' => $user->isMedico() ? 'Mis citas' : 'Citas',
-            'appointments' => $query->latest('scheduled_at')->get(),
+            'appointments' => $query->orderBy('scheduled_at')->get(),
             'patients' => Patient::where('is_active', true)->orderBy('name')->get(),
             'doctors' => User::query()->where('role', User::ROLE_MEDICO)
                 ->where('is_active', true)->orderBy('name')->get(),
+            'filterDoctors' => User::query()->where('role', User::ROLE_MEDICO)->orderBy('name')->get(),
             'filters' => $filters,
+            'view' => $view,
+            'anchor' => $anchor,
+        ]);
+    }
+
+    public function createAppointment()
+    {
+        return view('admin.citas.create', $this->appointmentFormData());
+    }
+
+    public function appointmentSlots(Request $request)
+    {
+        $validated = $request->validate([
+            'doctor_id' => ['required', 'integer', Rule::exists('users', 'id')->where(fn ($query) => $query
+                ->where('role', User::ROLE_MEDICO)->where('is_active', true))],
+            'date' => ['required', 'date_format:Y-m-d', 'after_or_equal:today'],
+            'appointment_id' => ['nullable', Rule::exists('appointments', 'id')->where(fn ($query) => $query
+                ->where('doctor_id', $request->input('doctor_id'))
+                ->where('status', '!=', Appointment::STATUS_CANCELLED))],
+        ]);
+
+        $except = isset($validated['appointment_id'])
+            ? Appointment::find($validated['appointment_id'])
+            : null;
+        $date = CarbonImmutable::createFromFormat('!Y-m-d', $validated['date']);
+
+        return response()->json([
+            'slots' => $this->appointmentSlotsForDate((int) $validated['doctor_id'], $date, $except),
         ]);
     }
 
@@ -568,18 +602,146 @@ class PanelSectionController extends Controller
             'scheduled_at' => ['required', 'date', 'after_or_equal:now'],
             'reason' => ['nullable', 'string', 'max:255'],
         ]);
+        $this->validateAppointmentAvailability($validated);
 
         Appointment::create($validated + ['status' => Appointment::STATUS_SCHEDULED]);
 
         return redirect()->route($this->appointmentsRoute())->with('success', 'Cita programada correctamente.');
     }
 
-    public function cancelAppointment(Appointment $appointment)
+    public function editAppointment(Appointment $appointment)
     {
+        return view('admin.citas.edit', $this->appointmentFormData($appointment));
+    }
+
+    public function updateAppointment(Request $request, Appointment $appointment)
+    {
+        if ($appointment->status === Appointment::STATUS_CANCELLED) {
+            return redirect()->route($this->appointmentsRoute())->with('error', 'No se puede reprogramar una cita cancelada.');
+        }
+
+        $validated = $request->validate([
+            'patient_id' => ['required', Rule::exists('patients', 'id')->where('is_active', true)],
+            'doctor_id' => ['required', Rule::exists('users', 'id')->where(fn ($query) => $query
+                ->where('role', User::ROLE_MEDICO)->where('is_active', true))],
+            'scheduled_at' => ['required', 'date', 'after_or_equal:now'],
+            'reason' => ['nullable', 'string', 'max:255'],
+            'reschedule_reason' => ['required', 'string', 'max:500'],
+        ]);
+        $this->validateAppointmentAvailability($validated, $appointment);
+
+        $appointment->fill($validated);
+        $appointment->save();
+
+        return redirect()->route($this->appointmentsRoute())->with('success', 'Cita reprogramada correctamente.');
+    }
+
+    public function cancelAppointment(Request $request, Appointment $appointment)
+    {
+        $validated = $request->validate([
+            'cancellation_reason' => ['required', 'string', 'max:500'],
+        ]);
+
+        if ($appointment->status === Appointment::STATUS_CANCELLED) {
+            return redirect()->route($this->appointmentsRoute())->with('error', 'La cita ya está cancelada.');
+        }
+
+        $appointment->cancellation_reason = $validated['cancellation_reason'];
         $appointment->status = Appointment::STATUS_CANCELLED;
         $appointment->save();
 
         return redirect()->route($this->appointmentsRoute())->with('success', 'Cita cancelada correctamente.');
+    }
+
+    public function confirmAppointment(Appointment $appointment)
+    {
+        if ($appointment->status !== Appointment::STATUS_SCHEDULED) {
+            return redirect()->route($this->appointmentsRoute())->with('error', 'Solo se pueden confirmar citas programadas.');
+        }
+
+        $appointment->status = Appointment::STATUS_CONFIRMED;
+        $appointment->save();
+
+        return redirect()->route($this->appointmentsRoute())->with('success', 'Cita confirmada correctamente.');
+    }
+
+    private function appointmentFormData(?Appointment $appointment = null): array
+    {
+        return [
+            'user' => Auth::user(),
+            'appointment' => $appointment,
+            'patients' => Patient::query()->where('is_active', true)->orderBy('name')->get(),
+            'doctors' => User::query()->where('role', User::ROLE_MEDICO)
+                ->where('is_active', true)->orderBy('name')->get(),
+        ];
+    }
+
+    private function validateAppointmentAvailability(array $data, ?Appointment $except = null): void
+    {
+        $scheduledAt = CarbonImmutable::parse($data['scheduled_at']);
+        $available = collect($this->appointmentSlotsForDate(
+            (int) $data['doctor_id'],
+            $scheduledAt->startOfDay(),
+            $except
+        ))->contains(fn (array $slot) => $slot['time'] === $scheduledAt->format('H:i'));
+
+        if (! $available) {
+            throw ValidationException::withMessages([
+                'scheduled_at' => 'El bloque seleccionado ya no está disponible para ese médico.',
+            ]);
+        }
+    }
+
+    private function appointmentSlotsForDate(int $doctorId, CarbonImmutable $date, ?Appointment $except = null): array
+    {
+        $profile = DoctorProfile::query()->with('shifts')
+            ->where('user_id', $doctorId)
+            ->whereHas('user', fn ($query) => $query
+                ->where('role', User::ROLE_MEDICO)->where('is_active', true))
+            ->first();
+
+        if (! $profile || ! $profile->appointment_duration) {
+            return [];
+        }
+
+        $duration = $profile->appointment_duration;
+        $appointments = Appointment::query()
+            ->where('doctor_id', $doctorId)
+            ->whereDate('scheduled_at', $date->format('Y-m-d'))
+            ->whereIn('status', [Appointment::STATUS_SCHEDULED, Appointment::STATUS_CONFIRMED])
+            ->when($except, fn ($query) => $query->whereKeyNot($except->getKey()))
+            ->get();
+        $slots = [];
+
+        foreach ($profile->shifts->where('day_of_week', $date->isoWeekday()) as $shift) {
+            $cursor = CarbonImmutable::parse($date->format('Y-m-d').' '.substr((string) $shift->start_time, 0, 5));
+            $shiftEnd = CarbonImmutable::parse($date->format('Y-m-d').' '.substr((string) $shift->end_time, 0, 5));
+
+            while ($cursor->addMinutes($duration)->lte($shiftEnd)) {
+                $slotEnd = $cursor->addMinutes($duration);
+                $isFuture = $cursor->gte(CarbonImmutable::now());
+                $isOccupied = $appointments->contains(function (Appointment $appointment) use ($cursor, $slotEnd, $duration) {
+                    $appointmentStart = $appointment->scheduled_at->toImmutable();
+                    $appointmentEnd = $appointmentStart->addMinutes($duration);
+
+                    return $appointmentStart->lt($slotEnd) && $appointmentEnd->gt($cursor);
+                });
+
+                if ($isFuture && ! $isOccupied) {
+                    $time = $cursor->format('H:i');
+                    $slots[$time] = [
+                        'time' => $time,
+                        'label' => $time.' - '.$slotEnd->format('H:i'),
+                    ];
+                }
+
+                $cursor = $slotEnd;
+            }
+        }
+
+        ksort($slots);
+
+        return array_values($slots);
     }
 
     public function agenda(Request $request)

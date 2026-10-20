@@ -193,7 +193,9 @@ class RoleAccessTest extends TestCase
             ->assertOk()
             ->assertDontSee('Paciente Dinamico');
 
-        $this->actingAs($admin)->patch(route('admin.appointments.cancel', $appointment))->assertRedirect();
+        $this->actingAs($admin)->patch(route('admin.appointments.cancel', $appointment), [
+            'cancellation_reason' => 'Paciente solicita cancelar.',
+        ])->assertRedirect();
         $this->assertDatabaseHas('appointments', [
             'id' => $appointment->id,
             'status' => Appointment::STATUS_CANCELLED,
@@ -349,7 +351,7 @@ class RoleAccessTest extends TestCase
         ]);
 
         $this->actingAs($admin)->get(route('admin.appointments', [
-            'scheduled_date' => '2026-10-10',
+            'anchor' => '2026-10-10',
             'reason' => 'Control',
             'status' => Appointment::STATUS_SCHEDULED,
         ]))
@@ -431,6 +433,21 @@ class RoleAccessTest extends TestCase
     {
         $reception = User::factory()->create(['role' => 'recepcion']);
         $doctor = User::factory()->create(['role' => 'medico']);
+        $scheduledAt = now()->addDay()->startOfDay()->setTime(10, 0);
+        $profile = \App\Models\DoctorProfile::create([
+            'user_id' => $doctor->id,
+            'professional_title' => 'Dr.',
+            'license_number' => 'LIC-ROLE-TEST',
+            'specialty' => 'Medicina general',
+            'phone' => '11111111',
+            'appointment_duration' => 30,
+            'office' => 'Consultorio 1',
+        ]);
+        $profile->shifts()->create([
+            'day_of_week' => $scheduledAt->isoWeekday(),
+            'start_time' => '09:00',
+            'end_time' => '12:00',
+        ]);
 
         $this->actingAs($reception)->post(route('recepcion.patients.store'), [
             'name' => 'Nuevo Paciente',
@@ -479,7 +496,7 @@ class RoleAccessTest extends TestCase
         $this->actingAs($reception)->post(route('recepcion.appointments.store'), [
             'patient_id' => $patient->id,
             'doctor_id' => $doctor->id,
-            'scheduled_at' => now()->addHour()->format('Y-m-d\\TH:i'),
+            'scheduled_at' => $scheduledAt->format('Y-m-d\\TH:i'),
             'reason' => 'Consulta inicial',
         ])->assertRedirect(route('recepcion.appointments'));
 
@@ -491,7 +508,9 @@ class RoleAccessTest extends TestCase
             'status' => Appointment::STATUS_SCHEDULED,
         ]);
 
-        $this->actingAs($reception)->patch(route('recepcion.appointments.cancel', $appointment))->assertRedirect();
+        $this->actingAs($reception)->patch(route('recepcion.appointments.cancel', $appointment), [
+            'cancellation_reason' => 'Paciente solicita cancelar.',
+        ])->assertRedirect();
         $this->assertDatabaseHas('appointments', [
             'id' => $appointment->id,
             'status' => Appointment::STATUS_CANCELLED,

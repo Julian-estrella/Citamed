@@ -18,6 +18,8 @@ class Appointment extends Model
         'doctor_id',
         'scheduled_at',
         'reason',
+        'reschedule_reason',
+        'cancellation_reason',
         'status',
     ];
 

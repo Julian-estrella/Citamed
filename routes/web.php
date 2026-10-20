@@ -92,10 +92,20 @@ Route::middleware([
             ->middleware('permission:gestionar_medicos')->name('admin.consultorios.availability');
         Route::get('/admin/citas', [PanelSectionController::class, 'appointments'])
             ->middleware('permission:gestionar_citas')->name('admin.appointments');
+        Route::get('/admin/citas/horarios-disponibles', [PanelSectionController::class, 'appointmentSlots'])
+            ->middleware('permission:gestionar_citas')->name('admin.appointments.slots');
+        Route::get('/admin/citas/create', [PanelSectionController::class, 'createAppointment'])
+            ->middleware('permission:gestionar_citas')->name('admin.appointments.create');
         Route::post('/admin/citas', [PanelSectionController::class, 'storeAppointment'])
             ->middleware('permission:gestionar_citas')->name('admin.appointments.store');
+        Route::get('/admin/citas/{appointment}/edit', [PanelSectionController::class, 'editAppointment'])
+            ->middleware('permission:gestionar_citas')->name('admin.appointments.edit');
+        Route::put('/admin/citas/{appointment}', [PanelSectionController::class, 'updateAppointment'])
+            ->middleware('permission:gestionar_citas')->name('admin.appointments.update');
         Route::patch('/admin/citas/{appointment}/cancel', [PanelSectionController::class, 'cancelAppointment'])
             ->middleware('permission:gestionar_citas')->name('admin.appointments.cancel');
+        Route::patch('/admin/citas/{appointment}/confirm', [PanelSectionController::class, 'confirmAppointment'])
+            ->middleware('permission:gestionar_citas')->name('admin.appointments.confirm');
         Route::get('/admin/agenda', [PanelSectionController::class, 'agenda'])
             ->middleware('permission:consultar_agenda')->name('admin.agenda');
         Route::get('/admin/agenda/{date}', [PanelSectionController::class, 'agendaDay'])
@@ -171,10 +181,20 @@ Route::middleware([
         ->middleware(['role:recepcion', 'permission:gestionar_medicos'])->name('recepcion.consultorios.availability');
     Route::get('/recepcion/citas', [PanelSectionController::class, 'appointments'])
         ->middleware(['role:recepcion', 'permission:gestionar_citas'])->name('recepcion.appointments');
+    Route::get('/recepcion/citas/horarios-disponibles', [PanelSectionController::class, 'appointmentSlots'])
+        ->middleware(['role:recepcion', 'permission:gestionar_citas'])->name('recepcion.appointments.slots');
+    Route::get('/recepcion/citas/create', [PanelSectionController::class, 'createAppointment'])
+        ->middleware(['role:recepcion', 'permission:programar_citas'])->name('recepcion.appointments.create');
     Route::post('/recepcion/citas', [PanelSectionController::class, 'storeAppointment'])
         ->middleware(['role:recepcion', 'permission:programar_citas'])->name('recepcion.appointments.store');
+    Route::get('/recepcion/citas/{appointment}/edit', [PanelSectionController::class, 'editAppointment'])
+        ->middleware(['role:recepcion', 'permission:modificar_citas'])->name('recepcion.appointments.edit');
+    Route::put('/recepcion/citas/{appointment}', [PanelSectionController::class, 'updateAppointment'])
+        ->middleware(['role:recepcion', 'permission:modificar_citas'])->name('recepcion.appointments.update');
     Route::patch('/recepcion/citas/{appointment}/cancel', [PanelSectionController::class, 'cancelAppointment'])
         ->middleware(['role:recepcion', 'permission:cancelar_citas'])->name('recepcion.appointments.cancel');
+    Route::patch('/recepcion/citas/{appointment}/confirm', [PanelSectionController::class, 'confirmAppointment'])
+        ->middleware(['role:recepcion', 'permission:modificar_citas'])->name('recepcion.appointments.confirm');
     Route::get('/recepcion/agenda', [PanelSectionController::class, 'agenda'])
         ->middleware(['role:recepcion', 'permission:consultar_agenda'])->name('recepcion.agenda');
     Route::get('/recepcion/agenda/{date}', [PanelSectionController::class, 'agendaDay'])
